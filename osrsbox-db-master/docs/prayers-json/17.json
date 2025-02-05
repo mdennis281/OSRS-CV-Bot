@@ -1,0 +1,13 @@
+{
+    "id": 17,
+    "name": "Protect from Magic",
+    "members": false,
+    "description": "Protection from magical attacks.",
+    "drain_per_minute": 20.0,
+    "wiki_url": "https://oldschool.runescape.wiki/w/Protect_from_Magic",
+    "requirements": {
+        "prayer": 37
+    },
+    "bonuses": {},
+    "icon": "iVBORw0KGgoAAAANSUhEUgAAABsAAAAbCAYAAACN1PRVAAAAwklEQVR42rXWSw7DIAwEUNhEvU9P2aPkcN12kS5SZUFqmwkoMIPk9dNg80lJtvJelxBbl/dZIuyf5EC2T9JiNpEoWSsRrWceESaqEWkiixRImqhAdSpyfw7gm+ipcH8wNIT56yZuGwm6HueCUKEI2DSv58NhFCgiCLo5EP2+IGgwFe5LTFOgyTHP1ZYhiJDKY3bLEEQ4vB6zAIKmJ7CFIWjiSupjGBJiBKg9IHEoCE8HHv1YtKcD/R1E/wn0c23V+PoBYMeWThrz3XIAAAAASUVORK5CYII="
+}

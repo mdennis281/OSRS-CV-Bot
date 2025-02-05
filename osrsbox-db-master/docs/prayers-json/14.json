@@ -1,0 +1,15 @@
+{
+    "id": 14,
+    "name": "Steel Skin",
+    "members": false,
+    "description": "Increases your defence by 15%.",
+    "drain_per_minute": 20.0,
+    "wiki_url": "https://oldschool.runescape.wiki/w/Steel_Skin",
+    "requirements": {
+        "prayer": 28
+    },
+    "bonuses": {
+        "defence": 15
+    },
+    "icon": "iVBORw0KGgoAAAANSUhEUgAAABwAAAAeCAYAAAA/xX6fAAAAvUlEQVR42u2WMQ6AIAxFZfE2ju6uHsB7eBc3b+DNXDyDJhhjEWg/ShcDyd9IX9rfQqsq6Zg9LJVzBl/qzZES1IX1bWOlCHVh89BZ+dDP3tyisHUarSgUicF6ExIHlESgvjeSLiB6/1F248AufzjRDCVRqAekwXLJ9znSgVJ2aJbBkqI+xoC4fwmdKgHBDsVmER0LYAbfvTI8MNOzhpT0P0A6IgVYgAVYgLvaiphhVUxbgpWXYf6DVl33v36wByWRwBqwhDHjAAAAAElFTkSuQmCC"
+}

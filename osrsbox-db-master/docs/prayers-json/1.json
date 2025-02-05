@@ -1,0 +1,15 @@
+{
+    "id": 1,
+    "name": "Thick Skin",
+    "members": false,
+    "description": "Increases your defence by 5%.",
+    "drain_per_minute": 5.0,
+    "wiki_url": "https://oldschool.runescape.wiki/w/Thick_Skin",
+    "requirements": {
+        "prayer": 1
+    },
+    "bonuses": {
+        "defence": 5
+    },
+    "icon": "iVBORw0KGgoAAAANSUhEUgAAABwAAAAeCAYAAAA/xX6fAAAAtklEQVR42u2WPQ6AMAiF64Ec3V09gPfwLm6e0FvUaNIIrRT6w2Jo8raGL/AK1LmiM/hvqRwquAoUB12m0d9ShGLYsc6PUmizN9inADv37RGGymIUlSMPFNuSesMpAKX3o7K/5YL+5AQz5IShERAG66XUZ+IFctlJsyRKKvORAsr9K3ipHLBiSrH9I2gLPkbVlMkDO401WUn/AoQtYkADGtCA/YDUglYa3vSCVvoMc8FUv/ttC/YCI4qmpw2ro6AAAAAASUVORK5CYII="
+}
