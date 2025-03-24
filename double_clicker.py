@@ -52,6 +52,7 @@ def random_double_click(x, y):
     if terminate:
         return
     user32.BlockInput(True)  # Disable mouse and keyboard input
+    pyautogui.mouseUp()  # Release any mouse button that might be pressed
     target_x = x + random.randint(-5, 5)
     target_y = y + random.randint(-5, 5)
     print(f"Moving to: ({target_x}, {target_y})")
