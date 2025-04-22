@@ -29,7 +29,7 @@ def click(x=-1,y=-1):
 def move_to_range(x1, y1, x2, y2):
     x = random.randint(x1, x2)
     y = random.randint(y1, y2)
-    _do_move(x, y)
+    move_to(x, y)
 
 
 def move_to(x, y, duration=1.0):

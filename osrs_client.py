@@ -4,7 +4,7 @@ import mss
 import time
 from PIL import Image
 import io
-from tools import find_subimage, MatchResult
+from tools import find_subimage, MatchResult, draw_box_on_image
 
 class GenericWindow:
     def __init__(self, window_title):
@@ -66,14 +66,51 @@ class GenericWindow:
             screenshot.save(filename)
             return filename
         return None
+    
+    def find_in_window(self, img: Image.Image, screenshot: Image=None) -> MatchResult:
+        """Finds a subimage within the RuneLite window."""
+        screenshot = screenshot or self.get_screenshot()
+        return find_subimage(screenshot, img)
+    
+    def show_in_window(self, match: MatchResult, screenshot: Image=None):
+        """Draws a box around the found match in the screenshot."""
+        screenshot = screenshot or self.get_screenshot()
+        if screenshot:
+            img_with_box = draw_box_on_image(screenshot, match, padding_x=0, padding_y=0, box_color="red")
+            img_with_box.show()
+
+class RLContext:
+    quick_prayer: MatchResult = None
+
 class RuneLiteClient(GenericWindow):
     def __init__(self):
         super().__init__("RuneLite -")
+        self.context = RLContext()
+        
+        
 
-    def find_in_window(self, img: Image.Image):
-        """Finds a subimage within the RuneLite window."""
+    @property
+    def quick_prayer_active(self) -> bool:
+        """Checks if the quick prayer is active in the RuneLite window."""
         screenshot = self.get_screenshot()
-        return find_subimage(screenshot, img)
+        if screenshot:
+            qp_disabled = Image.open("./ui_icons/quick-prayer-disabled.png")
+            qp_enabled = Image.open("./ui_icons/quick-prayer-enabled.png")
+            
+            disabled_match = self.find_in_window(qp_disabled, screenshot)
+            enabled_match = self.find_in_window(qp_enabled, screenshot)
+            
+            if enabled_match.confidence > disabled_match.confidence:
+                self.context.quick_prayer = enabled_match
+                return True
+            self.context.quick_prayer = disabled_match
+            return False
+
+        raise ValueError("Unable to capture screenshot.")
+    
+    
+
+    
     
 
 # Example usage
