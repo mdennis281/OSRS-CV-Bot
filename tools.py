@@ -69,21 +69,24 @@ class MatchResult:
         # 1. HSV masking to isolate colored text
         bgr = cv2.cvtColor(rgba, cv2.COLOR_RGBA2BGR)
         hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
-        ranges = [
-            ((40,  50,  50), (90, 255, 255)),   # green
-            ((10, 100, 100), (25, 255, 255)),   # orange/yellow
-            ((0,  100, 100), (10, 255, 255)),   # red low
-            ((160,100, 100), (180,255,255)),    # red high
-        ]
-        mask = sum([cv2.inRange(hsv, lo, hi) for lo, hi in ranges])
+        
+        
+        lower_hsv = np.array([ 0, 250, 250], dtype=np.uint8)
+        upper_hsv = np.array([ 65, 255, 255], dtype=np.uint8)
+        hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
+        mask = cv2.inRange(hsv, lower_hsv, upper_hsv)
+        #mask = sum([cv2.inRange(hsv, lo, hi) for lo, hi in ranges])
         isolated = cv2.bitwise_and(rgba, rgba, mask=mask)
 
         # 2. Grayscale + Otsu threshold
         gray = cv2.cvtColor(isolated, cv2.COLOR_RGBA2GRAY)
         _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        binary = cv2.bitwise_not(binary)
         processed = Image.fromarray(binary)
-        config = '--psm 7 -c tessedit_char_whitelist=0123456789'
+        config = '--oem 3 --psm 7 -c tessedit_char_whitelist=0123456789'
+
         text = pytesseract.image_to_string(processed, config=config).strip()
+        # processed.show()
         return text
 
 
@@ -210,6 +213,20 @@ if __name__ == "__main__":
     
     output_image.show()
 
+
+from functools import wraps
+import time
+
+
+def timeit(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        start_time = time.time()
+        result = func(*args, **kwargs)
+        end_time = time.time()
+        print(f"Function '{func.__name__}' took {end_time - start_time:.4f} seconds")
+        return result
+    return wrapper
 
 
 

@@ -1,4 +1,4 @@
-from osrs_client import RuneLiteClient
+from osrs_client import RuneLiteClient, ToolplaneTab, MinimapElement
 from mouse_control import random_double_click
 from tools import MatchResult, MatchShape
 from PIL import Image
@@ -19,10 +19,20 @@ def main():
     qp = rl_client.quick_prayer_active
     print(f"QP Enabled: {qp}")
 
-    if qp:
-        rl_client.click(rl_client.context.quick_prayer)
+    rl_client.click_minimap(MinimapElement.PRAYER, click_cnt=2)
 
-    rl_client.debug_context()
+    rl_client.get_screenshot()
+
+    rl_client.click_toolplane(ToolplaneTab.PRAYER)
+    rl_client.get_screenshot()
+
+    rl_client.click_toolplane(ToolplaneTab.INVENTORY)
+
+    rl_client.get_screenshot()
+
+    rl_client.click_item('Dwarven rock cake', click_cnt=20)
+
+    
 
     # map = rl_client.find_in_window(Image.open("./ui_icons/map.webp"), rl_client.get_screenshot())
     # map.shape = MatchShape.CIRCLE

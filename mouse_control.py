@@ -17,7 +17,7 @@ def _do_move(x,y):
 
     diff = int((abs(x - x2) + abs(y - y2)) / 10)
     duration = (diff / 100) * (movement_multiplier * random.uniform(0.5, 1.5))
-    print(f'x2: {x2}, y2: {y2}, x: {x}, y: {y}, diff: {diff}, duration={duration}')
+    #print(f'x2: {x2}, y2: {y2}, x: {x}, y: {y}, diff: {diff}, duration={duration}')
     pyautogui.moveTo(x, y,duration=duration)
 
 def click(x=-1,y=-1):
@@ -28,12 +28,23 @@ def click(x=-1,y=-1):
 
             
 def move_to_match(match: MatchResult):
-    x,y = match.get_point_within()
-    move_to(x, y)
+    user32.BlockInput(True) 
+    try:
+        x,y = match.get_point_within()
+        move_to(x, y)
+    finally:
+        user32.BlockInput(False)
 
-def click_in_match(match: MatchResult):
-    x,y = match.get_point_within()
-    click(x,y)
+def click_in_match(match: MatchResult, click_cnt=1):
+    user32.BlockInput(True) 
+    try:
+        x,y = match.get_point_within()
+        click(x,y)
+        for _ in range(click_cnt-1):
+            time.sleep(random.uniform(0.1, 0.3))
+            click(x,y)
+    finally:
+        user32.BlockInput(False)
 
 
 def move_to(x, y, duration=1.0):

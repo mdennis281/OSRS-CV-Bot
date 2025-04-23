@@ -4,8 +4,35 @@ import mss
 import time
 from PIL import Image
 import io
-from tools import find_subimage, MatchResult, draw_box_on_image, MatchShape
+from tools import find_subimage, MatchResult, MatchShape, timeit
 from mouse_control import click_in_match
+import cv2
+import numpy as np
+from dataclasses import field
+from item_db import ItemLookup, Item
+from enum import Enum
+
+class ToolplaneTab(Enum):
+    COMBAT = "combat"
+    SKILLS = "skills"
+    PROGRESS = "progress"
+    INVENTORY = "inventory"
+    EQUIPMENT = "equipment"
+    PRAYER = "prayer"
+    SPELLS = "spells"
+    GROUPS = "groups"
+    FRIENDS = "friends"
+    ACCOUNT = "account"
+    LOGOUT = "logout"
+    SETTINGS = "settings"
+    EMOTES = "emotes"
+    MUSIC = "music"
+
+class MinimapElement(Enum):
+    HEALTH = "health"
+    PRAYER = "prayer"
+    RUN = "run"
+    SPEC = "spec"
 
 class GenericWindow:
     def __init__(self, window_title):
@@ -48,6 +75,7 @@ class GenericWindow:
                 self.window.restore()
         time.sleep(.3)
 
+    @timeit
     def get_screenshot(self, maximize=True) -> Image.Image:
         """Captures and returns a screenshot of the RuneLite window as a PIL image."""
         if maximize:
@@ -69,10 +97,13 @@ class GenericWindow:
             return filename
         return None
     
-    def find_in_window(self, img: Image.Image, screenshot: Image=None) -> MatchResult:
+    def find_in_window(
+            self, img: Image.Image, screenshot: Image=None,
+            min_scale: float = 0.9, max_scale: float = 1.1
+        ) -> MatchResult:
         """Finds a subimage within the RuneLite window."""
         screenshot = screenshot or self.get_screenshot()
-        return find_subimage(screenshot, img)
+        return find_subimage(screenshot, img, min_scale=min_scale, max_scale=max_scale)
     
     def show_in_window(self, match: MatchResult, screenshot: Image=None, color="red"):
         """Draws a box around the found match in the screenshot."""
@@ -81,44 +112,21 @@ class GenericWindow:
             img_with_box = match.debug_draw(screenshot, color=color)
             img_with_box.show()
 
-    def click(self, match: MatchResult):
+    def click(self, match: MatchResult, click_cnt:int=1):
         """Clicks on the center of the matched area."""
         match = match.transform(self.window.left, self.window.top)
-        click_in_match(match)
+        click_in_match(match, click_cnt=click_cnt)
 
-class RLContext:
-    health: MatchResult = None
-    prayer: MatchResult = None
-    run: MatchResult = None
-    spec: MatchResult = None
 
-    def get_minimap_stat(self,match: MatchResult, screenshot: Image.Image) -> int:
-        """Returns the health value from the screenshot."""
-        val = match.transform(-22, 12)
-        val.end_x = val.start_x + 22
-        val.end_y = val.start_y + 15
-        val.shape = MatchShape.SQUARE
-        val.debug_draw(screenshot, color=(255, 255, 255))
-        
-
-        return val.extract_text(screenshot)
-
-    def find_matches(self, screenshot: Image.Image):
-        """Finds and sets the matches for health, prayer, run, and spec."""
-
-        map = find_subimage(screenshot, Image.open("ui_icons/map.webp"))
-        map.shape = MatchShape.CIRCLE
-        self.health = map.transform(-151, -76)
-        self.prayer = map.transform(-151, -42)
-        self.run = map.transform(-141, -10)
-        self.spec = map.transform(-119, 15)
         
 
 
 class RuneLiteClient(GenericWindow):
     def __init__(self,username=''):
         super().__init__(f'RuneLite - {username}')
-        self.context = RLContext()
+        self.minimap = MinimapContext()
+        self.toolplane = ToolplaneContext()
+        self.item_db = ItemLookup()
         self._last_screenshot = None
         self.on_resize()
 
@@ -127,27 +135,83 @@ class RuneLiteClient(GenericWindow):
         if self._last_screenshot:
             return self._last_screenshot
         return self.get_screenshot()
+    @timeit
+    def click_minimap(self, element: MinimapElement, click_cnt:int=1):
+        self.minimap.find_matches(self.screenshot) # todo: efficiency
+        match = getattr(self.minimap, element.value)
+        self.click(match, click_cnt=click_cnt)
+    @timeit    
+    def click_toolplane(self, tab: ToolplaneTab):
+        self.toolplane.find_matches(self.screenshot)
+        match = getattr(self.toolplane, tab.value)
+
+        if self.toolplane.get_active_tab(self.screenshot) != tab.value:
+            self.click(match)
+    @timeit
+    def click_item(
+            self,
+            item_identifier: str | int,
+            tab: ToolplaneTab = ToolplaneTab.INVENTORY,
+            click_cnt: int = 1,
+    ):
+        if isinstance(item_identifier, str):
+            item = self.item_db.get_item_by_name(item_identifier)
+        elif isinstance(item_identifier, int):
+            item = self.item_db.get_item_by_id(item_identifier)
+        
+        if not isinstance(item, Item):
+            raise ValueError(f'Item : {item_identifier} not found in database.')
+        
+        match = self.find_in_window(item.icon, self.screenshot)
+        
+        if match.confidence < .7:
+            raise ValueError(f"Item {item.name} not found in window. Confidence: {match.confidence}")
+            
+        self.click(match, click_cnt=click_cnt)
+        item.icon.show()
+
+
+
+
+
+
     
-    def debug_context(self):
-        self.context.find_matches(self.screenshot)
-        self.context.health.debug_draw(self.screenshot, color=(0, 255, 0))
-        self.context.prayer.debug_draw(self.screenshot, color=(0, 0, 255))
-        self.context.run.debug_draw(self.screenshot, color=(255, 0, 0))
-        self.context.spec.debug_draw(self.screenshot, color=(255, 255, 0))
-        health_val = self.context.get_minimap_stat(self.context.health, self.screenshot)
+    def debug_minimap(self):
+        self.get_screenshot()
+        self.minimap.find_matches(self.screenshot)
+        self.minimap.health.debug_draw(self.screenshot, color=(0, 255, 0))
+        self.minimap.prayer.debug_draw(self.screenshot, color=(0, 0, 255))
+        self.minimap.run.debug_draw(self.screenshot, color=(255, 0, 0))
+        self.minimap.spec.debug_draw(self.screenshot, color=(255, 255, 0))
+        health_val = self.minimap.get_minimap_stat(self.minimap.health, self.screenshot)
         print(f"Health: {health_val}")
-        prayer_val = self.context.get_minimap_stat(self.context.prayer, self.screenshot)
+        prayer_val = self.minimap.get_minimap_stat(self.minimap.prayer, self.screenshot)
         print(f"Prayer: {prayer_val}")
-        run_val = self.context.get_minimap_stat(self.context.run, self.screenshot)
+        run_val = self.minimap.get_minimap_stat(self.minimap.run, self.screenshot)
         print(f"Run: {run_val}")
-        spec_val = self.context.get_minimap_stat(self.context.spec, self.screenshot)
+        spec_val = self.minimap.get_minimap_stat(self.minimap.spec, self.screenshot)
         print(f"Spec: {spec_val}")
+        self.screenshot.show()
+
+    def debug_toolplane(self):
+        self.get_screenshot()
+        self.toolplane.find_matches(self.screenshot)
+        active_tab = self.toolplane.get_active_tab(self.screenshot)
+        print(f"Active Tab: {active_tab}")
+        for variable in vars(self.toolplane):
+            match = getattr(self.toolplane, variable)
+            if match and isinstance(match, MatchResult):
+                color = (0, 255, 0) if variable == active_tab else (255, 0, 0)
+                match.debug_draw(self.screenshot, color=color)
+                print(f"{variable}: {match}")
+
         self.screenshot.show()
 
     
     def on_resize(self):
         sc = self.get_screenshot()
-        self.context.find_matches(sc)
+        self.minimap.find_matches(sc)
+        self.toolplane.find_matches(sc)
 
     def get_screenshot(self, maximize=True) -> Image.Image:
         self._last_screenshot = super().get_screenshot(maximize)
@@ -168,8 +232,121 @@ class RuneLiteClient(GenericWindow):
             return True
         return False
     
+
     
 
+class ToolplaneContext:
+    combat:    MatchResult = None
+    skills:    MatchResult = None
+    progress:  MatchResult = None
+    inventory: MatchResult = None
+    equipment: MatchResult = None
+    prayer:    MatchResult = None
+    spells:    MatchResult = None
+    groups:    MatchResult = None
+    friends:   MatchResult = None
+    account:   MatchResult = None
+    logout:    MatchResult = None
+    settings:  MatchResult = None
+    emotes:    MatchResult = None
+    music:     MatchResult = None
+
+
+
+    def find_matches(self, screenshot: Image.Image):
+        """Finds and sets the matches for various UI elements."""
+        self.combat    = find_subimage(screenshot, Image.open("ui_icons/combat.webp"),    min_scale=0.9, max_scale=1.1)
+        self.skills    = find_subimage(screenshot, Image.open("ui_icons/stats.webp"),     min_scale=0.9, max_scale=1.1)
+        # self.progress = find_subimage(...)
+        self.inventory = find_subimage(screenshot, Image.open("ui_icons/inventory.webp"), min_scale=0.9, max_scale=1.1)
+        self.equipment = find_subimage(screenshot, Image.open("ui_icons/equipment.webp"), min_scale=0.9, max_scale=1.1)
+        self.prayer    = find_subimage(screenshot, Image.open("ui_icons/prayer.webp"),    min_scale=0.9, max_scale=1.1)
+        self.spells    = find_subimage(screenshot, Image.open("ui_icons/spellbook.webp"), min_scale=0.9, max_scale=1.1)
+        # self.groups   = find_subimage(...)
+        # self.friends  = find_subimage(...)
+        self.account   = find_subimage(screenshot, Image.open("ui_icons/account.webp"),   min_scale=0.9, max_scale=1.1)
+        self.logout    = find_subimage(screenshot, Image.open("ui_icons/logout.webp"),    min_scale=0.9, max_scale=1.1)
+        self.settings  = find_subimage(screenshot, Image.open("ui_icons/settings.webp"),  min_scale=0.9, max_scale=1.1)
+        self.emotes    = find_subimage(screenshot, Image.open("ui_icons/emotes.webp"),    min_scale=0.9, max_scale=1.1)
+        self.music     = find_subimage(screenshot, Image.open("ui_icons/music.webp"),     min_scale=0.9, max_scale=1.1)
+
+    def _is_tab_active(self,
+                       screenshot: Image.Image,
+                       match: MatchResult,
+                       pad: int = 4,
+                       red_ratio_thresh: float = 0.05) -> float:
+        """
+        Returns the fraction of pixels in the padded match box
+        that fall into the 'red' HSV range.
+        """
+        # Crop with padding
+        x1 = max(match.start_x - pad, 0)
+        y1 = max(match.start_y - pad, 0)
+        x2 = min(match.end_x + pad, screenshot.width)
+        y2 = min(match.end_y + pad, screenshot.height)
+        patch = screenshot.crop((x1, y1, x2, y2)).convert("RGB")
+        arr   = np.array(patch)
+
+        # Convert to HSV
+        hsv = cv2.cvtColor(arr, cv2.COLOR_RGB2HSV)
+        # Two red hue ranges
+        lo1, hi1 = np.array([0, 50, 50]),  np.array([10, 255, 255])
+        lo2, hi2 = np.array([160, 50, 50]), np.array([180, 255, 255])
+        m1 = cv2.inRange(hsv, lo1, hi1)
+        m2 = cv2.inRange(hsv, lo2, hi2)
+        red_mask = cv2.bitwise_or(m1, m2)
+
+        # Fraction of red pixels
+        return red_mask.mean() / 255.0
+
+    def get_active_tab(self, screenshot: Image.Image) -> str | None:
+        """
+        Returns the name of the active tab (highest red‐ratio),
+        or None if no tab exceeds the threshold.
+        """
+        best_tab = None
+        best_score = 0.0
+        for variable in vars(self):
+            match = getattr(self, variable)
+            if not isinstance(match, MatchResult):
+                continue
+            score = self._is_tab_active(screenshot, match)
+            if score > best_score:
+                best_score = score
+                best_tab = variable
+
+            
+
+        # you can choose to only return if best_score > some threshold
+        return best_tab
+    
+
+class MinimapContext:
+    health: MatchResult = None
+    prayer: MatchResult = None
+    run: MatchResult = None
+    spec: MatchResult = None
+
+    def get_minimap_stat(self,match: MatchResult, screenshot: Image.Image) -> int:
+        """Returns the health value from the screenshot."""
+        val = match.transform(-22, 13)
+        val.end_x = val.start_x + 22
+        val.end_y = val.start_y + 13
+        val.shape = MatchShape.SQUARE
+        val.debug_draw(screenshot, color=(255, 255, 255))
+        
+
+        return val.extract_text(screenshot)
+
+    def find_matches(self, screenshot: Image.Image):
+        """Finds and sets the matches for health, prayer, run, and spec."""
+
+        map = find_subimage(screenshot, Image.open("ui_icons/map.webp"))
+        map.shape = MatchShape.CIRCLE
+        self.health = map.transform(-151, -76)
+        self.prayer = map.transform(-151, -42)
+        self.run = map.transform(-141, -10)
+        self.spec = map.transform(-119, 15)
     
     
 

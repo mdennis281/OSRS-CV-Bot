@@ -1,6 +1,9 @@
 import json
 from dataclasses import dataclass
 from typing import Dict, Optional, Any
+from PIL import Image
+from io import BytesIO
+import base64
 
 @dataclass
 class Item:
@@ -20,6 +23,15 @@ class Item:
     lowalch: int
     highalch: int
     icon_b64: Optional[str] = None
+
+    @property
+    def icon(self) -> Image.Image:
+        """
+        Returns the icon image of the item.
+        """
+        if self.icon_b64:
+            return Image.open(BytesIO(base64.b64decode(self.icon_b64)))
+        return None
 
 class ItemLookup:
     """
