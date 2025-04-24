@@ -5,12 +5,13 @@ import time
 from PIL import Image
 import io
 from tools import find_subimage, MatchResult, MatchShape, timeit
-from mouse_control import click_in_match
+from mouse_control import click_in_match, move_to
 import cv2
 import numpy as np
 from dataclasses import field
 from item_db import ItemLookup, Item
 from enum import Enum
+import random
 
 class ToolplaneTab(Enum):
     COMBAT = "combat"
@@ -37,10 +38,10 @@ class MinimapElement(Enum):
 class GenericWindow:
     def __init__(self, window_title):
         self.window_title = window_title
-        self.window = None
+        self.window: gw.Win32Window = None
         self.update_window()
 
-    def update_window(self):
+    def update_window(self) -> gw.Win32Window:
         """Finds and updates the RuneLite window reference."""
         windows = gw.getWindowsWithTitle(self.window_title)
         self.window = windows[0] if windows else None
@@ -74,6 +75,43 @@ class GenericWindow:
                 self.window.minimize()
                 self.window.restore()
         time.sleep(.3)
+
+    def move_off_window(self,offset = 45):
+        """Randomly moves the window 5px outside the screen in a random direction."""
+        if not self.is_open:
+            return
+
+        directions = ["up", "down", "left", "right"]
+        direction = np.random.choice(directions)
+        
+
+        if direction == "up":
+            new_x = random.randint(
+                self.window.left,
+                self.window.right
+            )
+            new_y = self.window.top - offset
+        elif direction == "down":
+            new_x = random.randint(
+                self.window.left,
+                self.window.left + self.window.width
+            )
+            new_y = self.window.bottom + offset
+        elif direction == "left":
+            new_x = self.window.left - offset
+            new_y = random.randint(
+                self.window.top,
+                self.window.top + self.window.height
+            )
+        elif direction == "right":
+            new_x = self.window.right + offset
+            new_y = random.randint(
+                self.window.top,
+                self.window.top + self.window.height
+            )
+
+        # Move the window to the new position
+        move_to(new_x, new_y)
 
     @timeit
     def get_screenshot(self, maximize=True) -> Image.Image:
@@ -113,10 +151,10 @@ class GenericWindow:
             img_with_box = match.debug_draw(screenshot, color=color)
             img_with_box.show()
 
-    def click(self, match: MatchResult, click_cnt:int=1):
+    def click(self, match: MatchResult, click_cnt:int=1, min_click_interval: float = 0.3):
         """Clicks on the center of the matched area."""
         match = match.transform(self.window.left, self.window.top)
-        click_in_match(match, click_cnt=click_cnt)
+        click_in_match(match, click_cnt=click_cnt, min_click_interval=min_click_interval)
 
 
         
@@ -171,6 +209,8 @@ class RuneLiteClient(GenericWindow):
             item_identifier: str | int,
             tab: ToolplaneTab = ToolplaneTab.INVENTORY,
             click_cnt: int = 1,
+            min_confidence=0.7,
+            min_click_interval: float = 0.3
     ):
         self.click_toolplane(tab)
 
@@ -186,10 +226,10 @@ class RuneLiteClient(GenericWindow):
 
         print(f"Item: {item.name} Confidence: {match.confidence}")
         
-        if match.confidence < .7:
+        if match.confidence < min_confidence:
             raise ValueError(f"Item {item.name} not found in window. Confidence: {match.confidence}")
             
-        self.click(match, click_cnt=click_cnt)
+        self.click(match, click_cnt=click_cnt, min_click_interval=min_click_interval)
 
 
 

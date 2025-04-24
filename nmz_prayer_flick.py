@@ -17,7 +17,7 @@ terminate = False
 
 sleep_range = (40, 50)
 flick_forget_chance = 0.1  # X% chance to forget flicking
-target_absorption = 950
+min_absorption = 800
 
 
 
@@ -69,7 +69,10 @@ def flick_routine():
             rl_client.click_item(
                 'Dwarven rock cake',
                 click_cnt=min(health-1,8),
+                min_click_interval=0.6
             )
+
+        rl_client.move_off_window()
 
 def handle_absorption():
 
@@ -84,10 +87,13 @@ def handle_absorption():
     ans = get_val()
 
 
-    while get_val() + 50 < target_absorption and not terminate:
+    while get_val() <= min_absorption and not terminate:
         print(f"Absorption is {ans}, rock cake...")
         rl_client.click_item(
-            'Absorption (4)'
+            'Absorption (4)',
+            min_confidence=0.94,
+            min_click_interval=1,
+            click_cnt=4,
         )
 
         ans = get_val()
