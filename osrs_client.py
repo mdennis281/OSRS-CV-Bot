@@ -97,6 +97,7 @@ class GenericWindow:
             return filename
         return None
     
+    @timeit
     def find_in_window(
             self, img: Image.Image, screenshot: Image=None,
             min_scale: float = 0.9, max_scale: float = 1.1
@@ -138,15 +139,32 @@ class RuneLiteClient(GenericWindow):
     @timeit
     def click_minimap(self, element: MinimapElement, click_cnt:int=1):
         self.minimap.find_matches(self.screenshot) # todo: efficiency
-        match = getattr(self.minimap, element.value)
+        match: MatchResult = getattr(self.minimap, element.value)
+        
+        
+        
         self.click(match, click_cnt=click_cnt)
     @timeit    
-    def click_toolplane(self, tab: ToolplaneTab):
+    def click_toolplane(self, tab: ToolplaneTab,reload_on_tab_change:bool=True):
         self.toolplane.find_matches(self.screenshot)
         match = getattr(self.toolplane, tab.value)
 
         if self.toolplane.get_active_tab(self.screenshot) != tab.value:
             self.click(match)
+            if reload_on_tab_change: 
+                # necessary for getting active tab
+                self.get_screenshot()
+
+    @timeit
+    def get_minimap_stat(self, element: MinimapElement) -> int:
+        self.get_screenshot()
+        self.minimap.find_matches(self.screenshot)
+        match = getattr(self.minimap, element.value)
+        stat = self.minimap.get_minimap_stat(match, self.screenshot)
+        if stat:
+            return int(stat)
+        return None
+            
     @timeit
     def click_item(
             self,
@@ -154,6 +172,8 @@ class RuneLiteClient(GenericWindow):
             tab: ToolplaneTab = ToolplaneTab.INVENTORY,
             click_cnt: int = 1,
     ):
+        self.click_toolplane(tab)
+
         if isinstance(item_identifier, str):
             item = self.item_db.get_item_by_name(item_identifier)
         elif isinstance(item_identifier, int):
@@ -163,12 +183,13 @@ class RuneLiteClient(GenericWindow):
             raise ValueError(f'Item : {item_identifier} not found in database.')
         
         match = self.find_in_window(item.icon, self.screenshot)
+
+        print(f"Item: {item.name} Confidence: {match.confidence}")
         
         if match.confidence < .7:
             raise ValueError(f"Item {item.name} not found in window. Confidence: {match.confidence}")
             
         self.click(match, click_cnt=click_cnt)
-        item.icon.show()
 
 
 
@@ -183,15 +204,16 @@ class RuneLiteClient(GenericWindow):
         self.minimap.prayer.debug_draw(self.screenshot, color=(0, 0, 255))
         self.minimap.run.debug_draw(self.screenshot, color=(255, 0, 0))
         self.minimap.spec.debug_draw(self.screenshot, color=(255, 255, 0))
+        find_subimage(self.screenshot, Image.open("ui_icons/map.webp")).debug_draw(self.screenshot, color=(255, 255, 255))
         health_val = self.minimap.get_minimap_stat(self.minimap.health, self.screenshot)
         print(f"Health: {health_val}")
-        prayer_val = self.minimap.get_minimap_stat(self.minimap.prayer, self.screenshot)
-        print(f"Prayer: {prayer_val}")
-        run_val = self.minimap.get_minimap_stat(self.minimap.run, self.screenshot)
-        print(f"Run: {run_val}")
-        spec_val = self.minimap.get_minimap_stat(self.minimap.spec, self.screenshot)
-        print(f"Spec: {spec_val}")
-        self.screenshot.show()
+        # prayer_val = self.minimap.get_minimap_stat(self.minimap.prayer, self.screenshot)
+        # print(f"Prayer: {prayer_val}")
+        # run_val = self.minimap.get_minimap_stat(self.minimap.run, self.screenshot)
+        # print(f"Run: {run_val}")
+        # spec_val = self.minimap.get_minimap_stat(self.minimap.spec, self.screenshot)
+        # print(f"Spec: {spec_val}")
+        #self.screenshot.show()
 
     def debug_toolplane(self):
         self.get_screenshot()
@@ -205,7 +227,7 @@ class RuneLiteClient(GenericWindow):
                 match.debug_draw(self.screenshot, color=color)
                 print(f"{variable}: {match}")
 
-        self.screenshot.show()
+        #self.screenshot.show()
 
     
     def on_resize(self):
@@ -252,7 +274,7 @@ class ToolplaneContext:
     music:     MatchResult = None
 
 
-
+    @timeit
     def find_matches(self, screenshot: Image.Image):
         """Finds and sets the matches for various UI elements."""
         self.combat    = find_subimage(screenshot, Image.open("ui_icons/combat.webp"),    min_scale=0.9, max_scale=1.1)
@@ -271,10 +293,10 @@ class ToolplaneContext:
         self.music     = find_subimage(screenshot, Image.open("ui_icons/music.webp"),     min_scale=0.9, max_scale=1.1)
 
     def _is_tab_active(self,
-                       screenshot: Image.Image,
-                       match: MatchResult,
-                       pad: int = 4,
-                       red_ratio_thresh: float = 0.05) -> float:
+            screenshot: Image.Image,
+            match: MatchResult,
+            pad: int = 4,
+        ) -> float:
         """
         Returns the fraction of pixels in the padded match box
         that fall into the 'red' HSV range.
@@ -329,15 +351,14 @@ class MinimapContext:
 
     def get_minimap_stat(self,match: MatchResult, screenshot: Image.Image) -> int:
         """Returns the health value from the screenshot."""
-        val = match.transform(-22, 13)
-        val.end_x = val.start_x + 22
+        val = match.transform(-22, 11)
+        val.end_x = val.start_x + 21
         val.end_y = val.start_y + 13
         val.shape = MatchShape.SQUARE
-        val.debug_draw(screenshot, color=(255, 255, 255))
         
 
         return val.extract_text(screenshot)
-
+    @timeit
     def find_matches(self, screenshot: Image.Image):
         """Finds and sets the matches for health, prayer, run, and spec."""
 
@@ -347,6 +368,12 @@ class MinimapContext:
         self.prayer = map.transform(-151, -42)
         self.run = map.transform(-141, -10)
         self.spec = map.transform(-119, 15)
+
+        # make match mildly smaller
+        for variable in vars(self):
+            match = getattr(self, variable)
+            if isinstance(match, MatchResult):
+                match.scale_px(-2)
     
     
 

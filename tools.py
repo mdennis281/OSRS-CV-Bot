@@ -4,6 +4,7 @@ from PIL import Image, ImageDraw, ImageEnhance, ImageFilter
 from dataclasses import dataclass
 from enum import Enum
 import pytesseract
+import osrs_ocr
 
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
@@ -21,23 +22,33 @@ class MatchResult:
     scale: float = 1.0
     shape: MatchShape = MatchShape.SQUARE
 
-    def get_point_within(self) -> tuple[int, int]: 
-        """Get a random point within the match result."""
-        if MatchShape.SQUARE == self.shape:
-            x = np.random.randint(self.start_x, self.end_x)
-            y = np.random.randint(self.start_y, self.end_y)
-        elif MatchShape.CIRCLE == self.shape:
-            center_x = (self.start_x + self.end_x) // 2
-            center_y = (self.start_y + self.end_y) // 2
-            radius_x = (self.end_x - self.start_x) // 2
-            radius_y = (self.end_y - self.start_y) // 2
+    def get_point_within(self) -> tuple[int, int]:
+        """
+        Return a random integer pixel strictly inside the region.
+        Works for rectangles and arbitrary‐aspect ellipses.
+        """
+        if self.shape is MatchShape.SQUARE:
+            x = np.random.randint(self.start_x, self.end_x)            # [start_x, end_x-1]
+            y = np.random.randint(self.start_y, self.end_y)            # [start_y, end_y-1]
+            return x, y
 
-            angle = np.random.uniform(0, 2 * np.pi)
-            r = np.sqrt(np.random.uniform(0, 1)) * min(radius_x, radius_y)
+        # ---- Ellipse (formerly “circle”) ----
+        cx = (self.start_x + self.end_x) / 2.0
+        cy = (self.start_y + self.end_y) / 2.0
+        rx = (self.end_x  - self.start_x) / 2.0     # horizontal semi-axis
+        ry = (self.end_y  - self.start_y) / 2.0     # vertical   semi-axis
 
-            x = int(center_x + r * np.cos(angle))
-            y = int(center_y + r * np.sin(angle))
-        return x, y
+        while True:  # rejection sampling
+            # Generate a point in the bounding box first
+            dx = np.random.uniform(-rx, rx)
+            dy = np.random.uniform(-ry, ry)
+            if (dx / rx) ** 2 + (dy / ry) ** 2 <= 1.0:   # inside the ellipse?
+                x = int(round(cx + dx))
+                y = int(round(cy + dy))
+                # final safety clamp (guards against rare rounding escape)
+                x = max(self.start_x, min(x, self.end_x  - 1))
+                y = max(self.start_y, min(y, self.end_y  - 1))
+                return x, y
     
     def debug_draw(self, image: Image.Image, color="red", padding_x=0, padding_y=0) -> Image.Image:
         """Draw the match result on the image."""
@@ -81,12 +92,9 @@ class MatchResult:
         # 2. Grayscale + Otsu threshold
         gray = cv2.cvtColor(isolated, cv2.COLOR_RGBA2GRAY)
         _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        binary = cv2.bitwise_not(binary)
+        #binary = cv2.bitwise_not(binary)
         processed = Image.fromarray(binary)
-        config = '--oem 3 --psm 7 -c tessedit_char_whitelist=0123456789'
-
-        text = pytesseract.image_to_string(processed, config=config).strip()
-        # processed.show()
+        text = osrs_ocr.execute(processed)
         return text
 
 
@@ -101,6 +109,19 @@ class MatchResult:
             confidence=self.confidence,
             scale=self.scale
         )
+    
+    def scale_px(self, pixels:int):
+        """make the matchresult larger or smaller by a number of pixels"""
+        self.start_x -= pixels
+        self.start_y -= pixels
+        self.end_x += pixels
+        self.end_y += pixels
+
+    def get_cropped_match(self, image: Image.Image) -> Image.Image:
+        """Crop the match result from the image."""
+        return image.crop((self.start_x, self.start_y, self.end_x, self.end_y))
+        
+
 
 
 def find_subimage(parent: Image.Image,
@@ -144,6 +165,8 @@ def find_subimage(parent: Image.Image,
                                        resized_tpl,
                                        method,
                                        mask=resized_mask)
+            
+            result = np.nan_to_num(result, nan=-1.0, posinf=-1.0, neginf=-1.0)
 
             # get best match
             min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
