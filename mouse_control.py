@@ -104,8 +104,8 @@ def move_to(
                         x, y = x+perp[0]*mag, y+perp[1]*mag
 
                 # dont allow sub-zero
-                if x < 0: x = 0
-                if y < 0: y = 0
+                if x < 1: x = 1
+                if y < 1: y = 1
 
                 pyautogui.moveTo(int(x), int(y), _pause=0)
 
