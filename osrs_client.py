@@ -178,10 +178,9 @@ class RuneLiteClient(GenericWindow):
     def click_minimap(self, element: MinimapElement, click_cnt:int=1):
         self.minimap.find_matches(self.screenshot) # todo: efficiency
         match: MatchResult = getattr(self.minimap, element.value)
-        
-        
-        
         self.click(match, click_cnt=click_cnt)
+
+    
     @timeit    
     def click_toolplane(self, tab: ToolplaneTab,reload_on_tab_change:bool=True):
         self.toolplane.find_matches(self.screenshot)

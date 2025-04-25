@@ -57,7 +57,7 @@ def main_loop():
 
         
 def flick_routine():
-        health = rl_client.get_minimap_stat(MinimapElement.HEALTH)
+        
         prayer = rl_client.get_minimap_stat(MinimapElement.PRAYER)
 
         # Click the prayer icon on the minimap twice
@@ -67,32 +67,39 @@ def flick_routine():
                 click_cnt=2
             )
 
-
+        handle_health()
         handle_absorption()
 
-
-
-        if health and health > 1:
-            print(f'Health is {health}, rock cake...')
-            
-            try:
-                rl_client.click_item(
-                    'Dwarven rock cake',
-                    click_cnt=min(health-1,8),
-                    min_click_interval=0.6
-                )
-            except ValueError:
-                print("Warning: no rock cake found. weird flex but ok.")
-                return
-
-        # just make sure it's not already on
-        if rl_client.quick_prayer_active:
-            print("Quick prayer is already on.. why?")
-            rl_client.click_minimap(
-                MinimapElement.PRAYER
-            )
+        ensure_prayer_state(False)
         
-        rl_client.move_off_window()
+
+        
+
+
+def ensure_prayer_state(state: bool = False):
+    # just make sure it's not already on
+    if rl_client.quick_prayer_active != state:
+        print(f"Quick prayer is {'off' if state else 'on'}.. why?")
+        rl_client.click_minimap(
+            MinimapElement.PRAYER
+        )
+
+def handle_health():
+    health = rl_client.get_minimap_stat(MinimapElement.HEALTH)
+    if health and health > 1:
+        print(f'Health is {health}, rock cake...')
+        
+        try:
+            rl_client.click_item(
+                'Dwarven rock cake',
+                click_cnt=min(health-1,8),
+                min_click_interval=0.6
+            )
+        except ValueError:
+            print("Warning: no rock cake found. weird flex but ok.")
+            return
+        handle_health()
+
 
 def handle_absorption():
 
