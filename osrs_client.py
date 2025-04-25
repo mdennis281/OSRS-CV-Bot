@@ -212,6 +212,7 @@ class RuneLiteClient(GenericWindow):
             min_confidence=0.7,
             min_click_interval: float = 0.3
     ):
+        self.get_screenshot()
         self.click_toolplane(tab)
 
         if isinstance(item_identifier, str):
@@ -245,15 +246,15 @@ class RuneLiteClient(GenericWindow):
         self.minimap.run.debug_draw(self.screenshot, color=(255, 0, 0))
         self.minimap.spec.debug_draw(self.screenshot, color=(255, 255, 0))
         find_subimage(self.screenshot, Image.open("ui_icons/map.webp")).debug_draw(self.screenshot, color=(255, 255, 255))
-        health_val = self.minimap.get_minimap_stat(self.minimap.health, self.screenshot)
-        print(f"Health: {health_val}")
+        # health_val = self.minimap.get_minimap_stat(self.minimap.health, self.screenshot)
+        # print(f"Health: {health_val}")
         # prayer_val = self.minimap.get_minimap_stat(self.minimap.prayer, self.screenshot)
         # print(f"Prayer: {prayer_val}")
         # run_val = self.minimap.get_minimap_stat(self.minimap.run, self.screenshot)
         # print(f"Run: {run_val}")
         # spec_val = self.minimap.get_minimap_stat(self.minimap.spec, self.screenshot)
         # print(f"Spec: {spec_val}")
-        #self.screenshot.show()
+        self.screenshot.show()
 
     def debug_toolplane(self):
         self.get_screenshot()
@@ -404,16 +405,16 @@ class MinimapContext:
 
         map = find_subimage(screenshot, Image.open("ui_icons/map.webp"))
         map.shape = MatchShape.CIRCLE
-        self.health = map.transform(-151, -76)
-        self.prayer = map.transform(-151, -42)
-        self.run = map.transform(-141, -10)
-        self.spec = map.transform(-119, 15)
+        self.health = map.transform(-152, -77)
+        self.prayer = map.transform(-152, -43)
+        self.run = map.transform(-142, -11)
+        self.spec = map.transform(-120, 15)
 
         # make match mildly smaller
         for variable in vars(self):
             match = getattr(self, variable)
             if isinstance(match, MatchResult):
-                match.scale_px(-2)
+                match.scale_px(-3)
     
     
 

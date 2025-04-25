@@ -8,6 +8,7 @@ import keyboard
 import random
 import time
 import cv2
+import math
 
 
 
@@ -28,7 +29,7 @@ def main():
         return
     
     
-    # rl_client.debug_minimap()
+    #rl_client.debug_minimap()
     # rl_client.debug_toolplane()
     
     threading.Thread(target=listen_for_escape, daemon=True).start()
@@ -57,21 +58,40 @@ def main_loop():
         
 def flick_routine():
         health = rl_client.get_minimap_stat(MinimapElement.HEALTH)
+        prayer = rl_client.get_minimap_stat(MinimapElement.PRAYER)
 
         # Click the prayer icon on the minimap twice
-        rl_client.click_minimap(MinimapElement.PRAYER, click_cnt=2)
+        if prayer and prayer > 0:
+            rl_client.click_minimap(
+                MinimapElement.PRAYER, 
+                click_cnt=2
+            )
+
 
         handle_absorption()
+
+
 
         if health and health > 1:
             print(f'Health is {health}, rock cake...')
             
-            rl_client.click_item(
-                'Dwarven rock cake',
-                click_cnt=min(health-1,8),
-                min_click_interval=0.6
-            )
+            try:
+                rl_client.click_item(
+                    'Dwarven rock cake',
+                    click_cnt=min(health-1,8),
+                    min_click_interval=0.6
+                )
+            except ValueError:
+                print("Warning: no rock cake found. weird flex but ok.")
+                return
 
+        # just make sure it's not already on
+        if rl_client.quick_prayer_active:
+            print("Quick prayer is already on.. why?")
+            rl_client.click_minimap(
+                MinimapElement.PRAYER
+            )
+        
         rl_client.move_off_window()
 
 def handle_absorption():
@@ -81,22 +101,34 @@ def handle_absorption():
         try:
             return nmz_pot_reader.absorption_value(rl_client.get_screenshot())
         except ValueError:
-            raise RuntimeError("Failed to read absorption value.")
+            raise RuntimeError("Failed to read absorption value, assuming not in NMZ. gg")
 
     
     ans = get_val()
 
+    pots_to_drink = (min_absorption - ans) / 200
 
-    while get_val() <= min_absorption and not terminate:
-        print(f"Absorption is {ans}, rock cake...")
-        rl_client.click_item(
-            'Absorption (4)',
-            min_confidence=0.94,
-            min_click_interval=1,
-            click_cnt=4,
-        )
+    pots_to_drink = max(0, math.ceil(pots_to_drink)) 
 
-        ans = get_val()
+    if pots_to_drink > 0:
+        print(f"Drinking {pots_to_drink} absorption potions...")
+
+    for _ in range(pots_to_drink):
+        if terminate:
+            return
+
+        try:
+            rl_client.click_item(
+                'Absorption (4)',
+                min_confidence=0.94,
+                min_click_interval=1,
+                click_cnt=4,
+            )
+        except ValueError:
+            print("Warning: no nmz pots found.")
+            break
+
+        
 
 
 

@@ -25,6 +25,8 @@ def _block(on=True):       user32.BlockInput(bool(on))
 def click(x=-1, y=-1):
     if x >= 0 and y >= 0:
         move_to(x, y)
+
+    time.sleep(random.uniform(.05, .15))
     pyautogui.click()
 
 def move_to_match(match: MatchResult, **kw):
@@ -46,7 +48,7 @@ def click_in_match(match: MatchResult, click_cnt=1, min_click_interval=.3, **kw)
 def move_to(
     tx: int, ty: int,
     *,
-    overshoot_prob=.65, wobble_prob=.70, pause_prob=.18,
+    overshoot_prob=.40, wobble_prob=.70, pause_prob=.18,
     overshoot_ratio=(.07, .18), wobble_px=(1, 8), pause_max_ms=250,
     speed: float | None = None,
 ):

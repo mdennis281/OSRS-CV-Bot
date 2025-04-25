@@ -18,7 +18,7 @@ GLOOP_BULK = "https://chisel.weirdgloop.org/gazproj/gazbot/os_dump.json"
 def fetch_jagex_detail(item_id):
     try:
         r = requests.get(f"{JAGEX_BASE}/catalogue/detail.json",
-                         params={"item": item_id}, timeout=5)
+            params={"item": item_id}, timeout=5)
         r.raise_for_status()
         return r.json().get("item", {})
     except:
