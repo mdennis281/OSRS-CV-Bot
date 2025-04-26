@@ -19,6 +19,7 @@ terminate = False
 sleep_range = (40, 50)
 flick_forget_chance = 0.1  # X% chance to forget flicking
 min_absorption = 800
+afk = True
 
 
 
@@ -71,7 +72,10 @@ def flick_routine():
         handle_absorption()
 
         ensure_prayer_state(False)
-        
+
+        if afk:
+            rl_client.move_off_window()
+
 
         
 
