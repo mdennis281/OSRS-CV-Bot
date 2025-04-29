@@ -196,6 +196,31 @@ def find_subimage(parent: Image.Image,
 
     return best
 
+def write_text_to_image(image: Image, text: str, font_size: int = 20, color="black") -> Image.Image:
+
+    # Load a default font with the specified size
+    try:
+        font = ImageFont.truetype("arial.ttf", font_size)
+    except IOError:
+        font = ImageFont.load_default()
+
+    # Calculate text dimensions
+    text_width = font.getlength(text)
+    new_width = max(image.width, text_width + 20)
+    new_height = image.height + font_size + 20
+    new_image = Image.new("RGBA", (int(new_width), int(new_height)), (255, 255, 255, 0))
+
+    # Paste the original image onto the new image
+    new_image.paste(image, (0, 0))
+
+    # Write the text below the original image
+    draw = ImageDraw.Draw(new_image)
+    text_x = (new_width - text_width) // 2
+    text_y = image.height + 10
+    draw.text((text_x, text_y), text, fill=color, font=font)
+
+    return new_image
+
 def draw_box_on_image(image: Image, match: MatchResult, padding_x=0, padding_y=0, box_color="green") -> Image.Image:
 
     # Apply padding
@@ -240,6 +265,7 @@ if __name__ == "__main__":
 
 from functools import wraps
 import time
+from PIL import ImageFont
 
 
 def timeit(func):

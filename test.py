@@ -1,11 +1,18 @@
 from core.osrs_client import RuneLiteClient, ToolplaneTab, MinimapElement
-
+from core.tools import write_text_to_image
 
 rl_client = RuneLiteClient()
 
-while True:
+write_text_to_image(
+    rl_client.screenshot,
+    'testing the image writer',
+    color="red",
+    font_size=40
+).show()
 
-    rl_client.debug_minimap()
+# while True:
+
+#     rl_client.debug_minimap()
     
 
 

@@ -78,9 +78,9 @@ def get_number(img: Image.Image, font: FontChoice = FontChoice.AUTO, preprocess:
     try:
         
         if not txt:
-            raise ValueError("No digits recognised – Tesseract returned an empty string.")
+            raise OcrError("No digits recognised – Tesseract returned an empty string.", img)
         if not txt.isdigit():
-            raise ValueError(f"Expected digits only, got: {txt}")
+            raise OcrError(f"Expected digits only, got: {txt}", img)
         if '.' in txt:
             return float(txt)
 
@@ -89,3 +89,9 @@ def get_number(img: Image.Image, font: FontChoice = FontChoice.AUTO, preprocess:
         print( e , f"txt: '{txt}'")
         raise e
     
+class OcrError(Exception):
+    """Base class for OCR errors."""
+    def __init__(self, message: str, image: Image.Image = None):
+        super().__init__(message)
+        self.image = image
+

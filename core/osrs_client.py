@@ -4,9 +4,9 @@ import mss
 import time
 from PIL import Image
 import io
-from core.tools import find_subimage, MatchResult, MatchShape, timeit
+from core.tools import find_subimage, MatchResult, MatchShape, timeit, write_text_to_image
 from core.input.mouse_control import click_in_match, move_to
-from core.ocr import FontChoice
+from core.ocr import FontChoice, OcrError
 import cv2
 import numpy as np
 from dataclasses import field
@@ -201,7 +201,19 @@ class RuneLiteClient(GenericWindow):
         self.get_screenshot()
         self.minimap.find_matches(self.screenshot)
         match = getattr(self.minimap, element.value)
-        stat = self.minimap.get_minimap_stat(match, self.screenshot)
+        try:
+            stat = self.minimap.get_minimap_stat(match, self.screenshot)
+        except OcrError as e:
+            sc = self.get_screenshot()
+            sc = self.debug_minimap(sc)
+
+            write_text_to_image(
+                sc,
+                f"Error: {e}",
+                color="red",
+                font_size=20
+            ).show()
+            raise e
         if stat:
             return int(stat)
         return None
@@ -241,22 +253,25 @@ class RuneLiteClient(GenericWindow):
 
 
     
-    def debug_minimap(self):
-        self.get_screenshot()
+    def debug_minimap(self,screenshot: Image.Image = None):
+        if not screenshot:
+            screenshot = self.get_screenshot()
+
         if not self.minimap.health:
             self.minimap.find_matches(self.screenshot)
-        # self.minimap.health.debug_draw(self.screenshot, color=(0, 255, 0))
-        # self.minimap.prayer.debug_draw(self.screenshot, color=(0, 0, 255))
-        # self.minimap.run.debug_draw(self.screenshot, color=(255, 0, 0))
-        # self.minimap.spec.debug_draw(self.screenshot, color=(255, 255, 0))
-        # find_subimage(self.screenshot, Image.open("data/ui/map.webp")).debug_draw(self.screenshot, color=(255, 255, 255))
-        # health_val = self.minimap.get_minimap_stat(self.minimap.health, self.screenshot)
+        self.minimap.health.debug_draw(self.screenshot, color=(0, 255, 0))
+        self.minimap.prayer.debug_draw(self.screenshot, color=(0, 0, 255))
+        self.minimap.run.debug_draw(self.screenshot, color=(255, 0, 0))
+        self.minimap.spec.debug_draw(self.screenshot, color=(255, 255, 0))
+        find_subimage(self.screenshot, Image.open("data/ui/map.webp")).debug_draw(self.screenshot, color=(255, 255, 255))
+        health_val = self.minimap.get_minimap_stat(self.minimap.health, self.screenshot)
         # print(f"Health: {health_val}")
-        # prayer_val = self.minimap.get_minimap_stat(self.minimap.prayer, self.screenshot)
+        prayer_val = self.minimap.get_minimap_stat(self.minimap.prayer, self.screenshot)
         # print(f"Prayer: {prayer_val}")
         run_val = self.minimap.get_minimap_stat(self.minimap.run, self.screenshot)
         print(f"Run: {run_val}")
-        # spec_val = self.minimap.get_minimap_stat(self.minimap.spec, self.screenshot)
+        spec_val = self.minimap.get_minimap_stat(self.minimap.spec, self.screenshot)
+        return screenshot
         # print(f"Spec: {spec_val}")
         #self.screenshot.show()
 
@@ -394,15 +409,19 @@ class MinimapContext:
     run: MatchResult = None
     spec: MatchResult = None
 
+    def get_minimap_match(self,match: MatchResult, screenshot: Image.Image) -> MatchResult:
+        """Returns the match object for the given match."""
+        match = match.transform(-22, 11)
+        match.end_x = match.start_x + 21
+        match.end_y = match.start_y + 13
+        match.shape = MatchShape.SQUARE
+        
+        return match
+
     def get_minimap_stat(self,match: MatchResult, screenshot: Image.Image) -> int:
         """Returns the health value from the screenshot."""
-        val = match.transform(-22, 11)
-        val.end_x = val.start_x + 21
-        val.end_y = val.start_y + 13
-        val.shape = MatchShape.SQUARE
-        
-
-        return val.extract_number(screenshot, FontChoice.RUNESCAPE_SMALL)
+        match = self.get_minimap_match(match, screenshot)
+        return match.extract_number(screenshot, FontChoice.RUNESCAPE_SMALL)
     @timeit
     def find_matches(self, screenshot: Image.Image):
         """Finds and sets the matches for health, prayer, run, and spec."""
