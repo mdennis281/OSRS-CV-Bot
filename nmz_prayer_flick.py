@@ -63,7 +63,7 @@ def main_loop():
                 if failcount > 5:
                     print("Too many errors, terminating...")
                     break
-                continue
+                rl_client.move_off_window()
 
         wait(random.uniform(*sleep_range))
 
