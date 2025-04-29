@@ -1,8 +1,8 @@
-from osrs_client import RuneLiteClient, ToolplaneTab, MinimapElement
-from mouse_control import random_double_click
-from tools import MatchResult, MatchShape
+from core.osrs_client import RuneLiteClient, ToolplaneTab, MinimapElement
+from core.input.mouse_control import random_double_click
+from core.tools import MatchResult, MatchShape
 from PIL import Image
-import nmz_pot_reader
+import core.nmz_pot_reader as nmz_pot_reader
 import threading
 import keyboard
 import random
@@ -70,7 +70,6 @@ def flick_routine():
 
         handle_health()
         handle_absorption()
-
         ensure_prayer_state(False)
 
         if afk:
