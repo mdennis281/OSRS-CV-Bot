@@ -1,6 +1,7 @@
 from core.osrs_client import RuneLiteClient, ToolplaneTab, MinimapElement
 from core.input.mouse_control import random_double_click
 from core.tools import MatchResult, MatchShape
+from core import ocr
 from PIL import Image
 import core.nmz_pot_reader as nmz_pot_reader
 import threading
@@ -46,13 +47,23 @@ def main():
 
 
 def main_loop():
+    failcount = 0
     while not terminate:
         if random.random() < flick_forget_chance:
             print("Forgetting to flick...")
             
         else:
             print("Flicking...")
-            flick_routine()
+            try:
+                flick_routine()
+                failcount = 0
+            except Exception as e:
+                print(f"Error in flick routine: {e}")
+                failcount += 1
+                if failcount > 5:
+                    print("Too many errors, terminating...")
+                    break
+                continue
 
         wait(random.uniform(*sleep_range))
 
