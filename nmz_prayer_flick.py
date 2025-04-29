@@ -101,7 +101,10 @@ def handle_health():
         except ValueError:
             print("Warning: no rock cake found. weird flex but ok.")
             return
+        # sleep for health value to be updated
+        time.sleep(0.5)
         handle_health()
+
 
 
 def handle_absorption():
