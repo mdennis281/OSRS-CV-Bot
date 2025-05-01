@@ -5,14 +5,20 @@ import time
 from PIL import Image
 import io
 from core.tools import find_subimage, MatchResult, MatchShape, timeit, write_text_to_image
-from core.input.mouse_control import click_in_match, move_to
-from core.ocr import FontChoice, OcrError
+from core.input.mouse_control import click_in_match, move_to, ClickType
+from core.ocr import FontChoice, OcrError, find_string_bounds
+from typing import Tuple
+import threading
 import cv2
 import numpy as np
 from dataclasses import field
 from core.item_db import ItemLookup, Item
 from enum import Enum
 import random
+from pathlib import Path
+import keyboard
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 
 class ToolplaneTab(Enum):
     COMBAT = "combat"
@@ -47,6 +53,20 @@ class GenericWindow:
         windows = gw.getWindowsWithTitle(self.window_title)
         self.window = windows[0] if windows else None
 
+    def start_resize_watch_polling(self, on_resize=None, interval=0.2):
+        def _loop():
+            while not stop_evt.is_set():
+                if self.is_open:
+                    rect = (self.window.width, self.window.height)
+                    if rect != last[0]:
+                        last[0] = rect
+                        if on_resize: on_resize()
+                        else: self.on_resize()
+                stop_evt.wait(interval)
+        stop_evt, last = threading.Event(), [(self.window.width, self.window.height)]
+        threading.Thread(target=_loop, daemon=True).start()
+        return stop_evt  # caller .set() to stop
+
     @property
     def screenshot(self) -> Image.Image:
         if self._last_screenshot:
@@ -77,11 +97,16 @@ class GenericWindow:
         """Brings the RuneLite window to the foreground."""
         if self.is_open:
             try:
+                # pressing alt makes activate() more reliable
+                keyboard.press('alt')
                 self.window.activate()
             except:
                 self.window.minimize()
                 self.window.restore()
-        time.sleep(.3)
+                time.sleep(.3)
+            finally:
+                keyboard.release('alt')
+        
 
     def move_off_window(self,offset = 45):
         """Randomly moves the window 5px outside the screen in a random direction."""
@@ -160,10 +185,20 @@ class GenericWindow:
             img_with_box = match.debug_draw(screenshot, color=color)
             img_with_box.show()
 
-    def click(self, match: MatchResult, click_cnt:int=1, min_click_interval: float = 0.3):
+    def click(self, match: MatchResult | Tuple[int], click_cnt:int=1, min_click_interval: float = 0.3, click_type=ClickType.LEFT):
         """Clicks on the center of the matched area."""
+        if isinstance(match, tuple):
+            x, y = match
+            match = MatchResult(x-1, y-1, x+1, y+1)
+        
         match = match.transform(self.window.left, self.window.top)
-        click_in_match(match, click_cnt=click_cnt, min_click_interval=min_click_interval)
+        
+
+        click_in_match(
+            match, click_cnt=click_cnt, 
+            min_click_interval=min_click_interval,
+            click_type=click_type
+        )
 
 
         
@@ -176,6 +211,9 @@ class RuneLiteClient(GenericWindow):
         self.toolplane = ToolplaneContext()
         self.item_db = ItemLookup()
         self.on_resize()
+        self.start_resize_watch_polling()
+        self.ui_type: UIType = self.get_ui_type()
+        print(f'OSRS UI Type: {self.ui_type.value}')
 
     
     @timeit
@@ -249,6 +287,52 @@ class RuneLiteClient(GenericWindow):
 
 
 
+    def choose_right_click_opt(
+            self,
+            option: str
+    ):
+        sc = self.get_screenshot()
+        right_click_header = Image.open('data/ui/right-click-header.png')
+        right_click_menu_end = Image.open('data/ui/right-click-menu-end.png')
+
+        top_left = self.find_in_window(
+            right_click_header,
+            sc,
+            min_scale=.99,
+            max_scale=1.01
+        )
+        bottom_right = self.find_in_window(
+            right_click_menu_end,
+            sc,
+            min_scale=.99,
+            max_scale=1.01
+        )
+        menu_match = MatchResult(
+            start_x=top_left.start_x,
+            start_y=top_left.start_y,
+            end_x=bottom_right.end_x,
+            end_y=bottom_right.end_y,
+        )
+        
+        menu = menu_match.get_cropped_match(sc)
+
+        ocr_match = find_string_bounds(
+            menu,
+            option,
+            lang=FontChoice.RUNESCAPE_BOLD.value
+        )
+        match = MatchResult(
+            ocr_match['x1'],
+            ocr_match['y1'],
+            ocr_match['x2'],
+            ocr_match['y2'],
+            confidence=ocr_match['confidence']
+        )
+        match = match.transform(
+            menu_match.start_x,
+            menu_match.start_y
+        )
+        self.click(match)
 
 
 
@@ -291,9 +375,20 @@ class RuneLiteClient(GenericWindow):
 
     
     def on_resize(self):
+        print('resized!')
         sc = self.get_screenshot()
         self.minimap.find_matches(sc)
         self.toolplane.find_matches(sc)
+        
+
+    def get_ui_type(self) -> 'UIType':
+        modern_toolplane = Image.open('data/ui/toolplane-modern.png')
+        classic_coolplane = Image.open('data/ui/toolplane-classic.png')
+
+        modern = self.find_in_window(modern_toolplane,self.screenshot)
+        classic = self.find_in_window(classic_coolplane,self.screenshot)
+
+        return UIType.CLASSIC if classic.confidence > modern.confidence else UIType.MODERN
 
     def get_screenshot(self, maximize=True) -> Image.Image:
         self._last_screenshot = super().get_screenshot(maximize)
@@ -315,6 +410,8 @@ class RuneLiteClient(GenericWindow):
         return False
     
 
+
+
     
 
 class ToolplaneContext:
@@ -333,24 +430,49 @@ class ToolplaneContext:
     emotes:    MatchResult = None
     music:     MatchResult = None
 
+    def __init__(self):
+        self._TEMPLATE_PATHS = {
+            "combat":    Path("data/ui/combat.webp"),
+            "skills":    Path("data/ui/stats.webp"),
+            "inventory": Path("data/ui/inventory.webp"),
+            "equipment": Path("data/ui/equipment.webp"),
+            "prayer":    Path("data/ui/prayer.webp"),
+            "spells":    Path("data/ui/spellbook.webp"),
+            "account":   Path("data/ui/account.webp"),
+            "logout":    Path("data/ui/logout.webp"),
+            "settings":  Path("data/ui/settings.webp"),
+            "emotes":    Path("data/ui/emotes.webp"),
+            "music":     Path("data/ui/music.webp"),
+            # progress / groups / friends omitted for now
+        }
+        self._TEMPLATE_CACHE = {k: Image.open(p) for k, p in self._TEMPLATE_PATHS.items()}
+
 
     @timeit
-    def find_matches(self, screenshot: Image.Image):
-        """Finds and sets the matches for various UI elements."""
-        self.combat    = find_subimage(screenshot, Image.open("data/ui/combat.webp"),    min_scale=0.9, max_scale=1.1)
-        self.skills    = find_subimage(screenshot, Image.open("data/ui/stats.webp"),     min_scale=0.9, max_scale=1.1)
-        # self.progress = find_subimage(...)
-        self.inventory = find_subimage(screenshot, Image.open("data/ui/inventory.webp"), min_scale=0.9, max_scale=1.1)
-        self.equipment = find_subimage(screenshot, Image.open("data/ui/equipment.webp"), min_scale=0.9, max_scale=1.1)
-        self.prayer    = find_subimage(screenshot, Image.open("data/ui/prayer.webp"),    min_scale=0.9, max_scale=1.1)
-        self.spells    = find_subimage(screenshot, Image.open("data/ui/spellbook.webp"), min_scale=0.9, max_scale=1.1)
-        # self.groups   = find_subimage(...)
-        # self.friends  = find_subimage(...)
-        self.account   = find_subimage(screenshot, Image.open("data/ui/account.webp"),   min_scale=0.9, max_scale=1.1)
-        self.logout    = find_subimage(screenshot, Image.open("data/ui/logout.webp"),    min_scale=0.9, max_scale=1.1)
-        self.settings  = find_subimage(screenshot, Image.open("data/ui/settings.webp"),  min_scale=0.9, max_scale=1.1)
-        self.emotes    = find_subimage(screenshot, Image.open("data/ui/emotes.webp"),    min_scale=0.9, max_scale=1.1)
-        self.music     = find_subimage(screenshot, Image.open("data/ui/music.webp"),     min_scale=0.9, max_scale=1.1)
+    def find_matches(self, screenshot: Image.Image, max_workers: int | None = 10):
+        """
+        Locate all tool-plane icons in *screenshot* concurrently.
+        Results are assigned to the matching attributes (self.combat, …).
+        """
+        def _worker(name_img):
+            name, tpl_img = name_img
+            return name, find_subimage(
+                screenshot, tpl_img, min_scale=0.9, max_scale=1.1
+            )
+
+        # ThreadPoolExecutor is ideal here because find_subimage is
+        # largely I/O / C-extension work, not pure Python CPU.
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = (pool.submit(_worker, item) for item in self._template_items())
+            for fut in as_completed(futures):
+                name, match = fut.result()
+                setattr(self, name, match)
+
+    # ────────────────────────────────────────────────────────────────
+    # helper: iterator of (name, template-image) pairs
+    # ────────────────────────────────────────────────────────────────
+    def _template_items(self):
+        return self._TEMPLATES.items() if "_TEMPLATES" in globals() else self._TEMPLATE_CACHE.items()
 
     def _is_tab_active(self,
             screenshot: Image.Image,
@@ -381,6 +503,7 @@ class ToolplaneContext:
         # Fraction of red pixels
         return red_mask.mean() / 255.0
 
+    @timeit
     def get_active_tab(self, screenshot: Image.Image) -> str | None:
         """
         Returns the name of the active tab (highest red‐ratio),
@@ -439,6 +562,15 @@ class MinimapContext:
             if isinstance(match, MatchResult):
                 match.scale_px(-3)
     
+class UIArea(Enum):
+    TOOLPLANE = 'toolplane'
+    CHAT = 'chat'
+    MINIMAP = 'minimap'
+
+class UIType(Enum):
+    MODERN = 'modern'
+    CLASSIC = 'classic'
+    FIXED = 'fixed'
     
 
 # Example usage
