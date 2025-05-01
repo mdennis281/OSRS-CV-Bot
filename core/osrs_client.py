@@ -430,6 +430,8 @@ class RuneLiteClient(GenericWindow):
         """Checks if the quick prayer is active in the RuneLite window."""
         qp_disabled = Image.open("data/ui/quick-prayer-disabled.png")
         qp_enabled = Image.open("data/ui/quick-prayer-enabled.png")
+
+        self.get_screenshot()
         
         disabled_match = self.find_in_window(qp_disabled, self.screenshot)
         enabled_match = self.find_in_window(qp_enabled, self.screenshot)
