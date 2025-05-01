@@ -359,9 +359,7 @@ class RuneLiteClient(GenericWindow):
     def debug_minimap(self,screenshot: Image.Image = None):
         if not screenshot:
             screenshot = self.get_screenshot()
-
-        if not self.minimap.health:
-            self.minimap.find_matches(self.screenshot)
+            
         self.minimap.health.debug_draw(self.screenshot, color=(0, 255, 0))
         self.minimap.prayer.debug_draw(self.screenshot, color=(0, 0, 255))
         self.minimap.run.debug_draw(self.screenshot, color=(255, 0, 0))
@@ -380,7 +378,6 @@ class RuneLiteClient(GenericWindow):
 
     def debug_toolplane(self):
         self.get_screenshot()
-        self.toolplane.find_matches(self.screenshot)
         active_tab = self.toolplane.get_active_tab(self.screenshot)
         print(f"Active Tab: {active_tab}")
         for variable in vars(self.toolplane):
