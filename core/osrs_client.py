@@ -7,7 +7,7 @@ import io
 from core.tools import find_subimage, MatchResult, MatchShape, timeit, write_text_to_image
 from core.input.mouse_control import click_in_match, move_to, ClickType
 from core.ocr import FontChoice, OcrError, find_string_bounds
-from typing import Tuple
+from typing import Tuple, List
 import threading
 import cv2
 import numpy as np
@@ -46,6 +46,7 @@ class GenericWindow:
     def __init__(self, window_title):
         self.window_title = window_title
         self.window: gw.Win32Window = None
+        self._last_screenshot: Image.Image = None
         self.update_window()
 
     def update_window(self) -> gw.Win32Window:
@@ -95,7 +96,7 @@ class GenericWindow:
 
     def bring_to_focus(self):
         """Brings the RuneLite window to the foreground."""
-        if self.is_open:
+        if self.is_open and not self.window.isActive:
             try:
                 # pressing alt makes activate() more reliable
                 keyboard.press('alt')
@@ -171,11 +172,12 @@ class GenericWindow:
     
     @timeit
     def find_in_window(
-            self, img: Image.Image, screenshot: Image=None,
+            self, img: Image.Image, screenshot: Image.Image=None,
             min_scale: float = 0.9, max_scale: float = 1.1
         ) -> MatchResult:
         """Finds a subimage within the RuneLite window."""
         screenshot = screenshot or self.get_screenshot()
+
         return find_subimage(screenshot, img, min_scale=min_scale, max_scale=max_scale)
     
     def show_in_window(self, match: MatchResult, screenshot: Image=None, color="red"):
@@ -185,15 +187,24 @@ class GenericWindow:
             img_with_box = match.debug_draw(screenshot, color=color)
             img_with_box.show()
 
-    def click(self, match: MatchResult | Tuple[int], click_cnt:int=1, min_click_interval: float = 0.3, click_type=ClickType.LEFT):
+    def click(
+            self, match: MatchResult | Tuple[int], 
+            click_cnt:int=1, min_click_interval: float = 0.3, 
+            click_type=ClickType.LEFT, parent_sectors: List[MatchResult]=[]):
         """Clicks on the center of the matched area."""
         if isinstance(match, tuple):
             x, y = match
             match = MatchResult(x-1, y-1, x+1, y+1)
+
+
+        # subimage in subimage, revert back to sc match
+
+        for sector in parent_sectors:
+            match = match.transform(sector.start_x,sector.start_y)
         
         match = match.transform(self.window.left, self.window.top)
         
-
+        self.bring_to_focus()
         click_in_match(
             match, click_cnt=click_cnt, 
             min_click_interval=min_click_interval,
@@ -210,22 +221,24 @@ class RuneLiteClient(GenericWindow):
         self.minimap = MinimapContext()
         self.toolplane = ToolplaneContext()
         self.item_db = ItemLookup()
-        self.on_resize()
-        self.start_resize_watch_polling()
+        self.sectors: UISectors = UISectors()
+
         self.ui_type: UIType = self.get_ui_type()
         print(f'OSRS UI Type: {self.ui_type.value}')
+        
+        self.on_resize()
+        self.start_resize_watch_polling()
+        
 
     
     @timeit
     def click_minimap(self, element: MinimapElement, click_cnt:int=1):
-        self.minimap.find_matches(self.screenshot) # todo: efficiency
         match: MatchResult = getattr(self.minimap, element.value)
         self.click(match, click_cnt=click_cnt)
 
     
     @timeit    
     def click_toolplane(self, tab: ToolplaneTab,reload_on_tab_change:bool=True):
-        self.toolplane.find_matches(self.screenshot)
         match = getattr(self.toolplane, tab.value)
 
         if self.toolplane.get_active_tab(self.screenshot) != tab.value:
@@ -237,7 +250,6 @@ class RuneLiteClient(GenericWindow):
     @timeit
     def get_minimap_stat(self, element: MinimapElement) -> int:
         self.get_screenshot()
-        self.minimap.find_matches(self.screenshot)
         match = getattr(self.minimap, element.value)
         try:
             stat = self.minimap.get_minimap_stat(match, self.screenshot)
@@ -262,7 +274,7 @@ class RuneLiteClient(GenericWindow):
             item_identifier: str | int,
             tab: ToolplaneTab = ToolplaneTab.INVENTORY,
             click_cnt: int = 1,
-            min_confidence=0.7,
+            min_confidence=0.97,
             min_click_interval: float = 0.3
     ):
         self.get_screenshot()
@@ -276,14 +288,21 @@ class RuneLiteClient(GenericWindow):
         if not isinstance(item, Item):
             raise ValueError(f'Item : {item_identifier} not found in database.')
         
-        match = self.find_in_window(item.icon, self.screenshot)
+        sc = self.sectors.toolplane.crop_in(self.screenshot)
+        match = self.find_in_window(
+            item.icon, sc 
+        )
 
-        print(f"Item: {item.name} Confidence: {match.confidence}")
+        print(f"{item.name} | Confidence: {round(match.confidence*100,2)}%")
         
         if match.confidence < min_confidence:
             raise ValueError(f"Item {item.name} not found in window. Confidence: {match.confidence}")
             
-        self.click(match, click_cnt=click_cnt, min_click_interval=min_click_interval)
+        self.click(
+            match, click_cnt=click_cnt, 
+            min_click_interval=min_click_interval,
+            parent_sectors=[self.sectors.toolplane]
+        )
 
 
 
@@ -314,7 +333,7 @@ class RuneLiteClient(GenericWindow):
             end_y=bottom_right.end_y,
         )
         
-        menu = menu_match.get_cropped_match(sc)
+        menu = menu_match.crop_in(sc)
 
         ocr_match = find_string_bounds(
             menu,
@@ -379,6 +398,7 @@ class RuneLiteClient(GenericWindow):
         sc = self.get_screenshot()
         self.minimap.find_matches(sc)
         self.toolplane.find_matches(sc)
+        self.sectors.find_matches(sc, self.ui_type)
         
 
     def get_ui_type(self) -> 'UIType':
@@ -409,8 +429,32 @@ class RuneLiteClient(GenericWindow):
             return True
         return False
     
+class UIArea(Enum):
+    TOOLPLANE = 'toolplane'
+    CHAT = 'chat'
+    MINIMAP = 'minimap'
 
+class UIType(Enum):
+    MODERN = 'modern'
+    CLASSIC = 'classic'
+    FIXED = 'fixed'
 
+class UISectors:
+    toolplane: MatchResult = None
+    chat: MatchResult = None
+
+    def find_matches(self, sc: Image.Image, uitype: UIType):
+        if uitype == UIType.MODERN:
+            toolplane = Image.open('data/ui/toolplane-modern.png')
+        else:
+            toolplane = Image.open('data/ui/toolplane-classic.png')
+        
+        self.toolplane = find_subimage(
+            sc, toolplane,
+            min_scale=1,max_scale=1
+        )
+
+        # TODO: find chat
 
     
 
@@ -531,12 +575,13 @@ class MinimapContext:
     prayer: MatchResult = None
     run: MatchResult = None
     spec: MatchResult = None
+    MATCH_SCALE = -4 #px
 
     def get_minimap_match(self,match: MatchResult, screenshot: Image.Image) -> MatchResult:
         """Returns the match object for the given match."""
-        match = match.transform(-22, 11)
-        match.end_x = match.start_x + 21
-        match.end_y = match.start_y + 13
+        match = match.transform(-22+self.MATCH_SCALE, 13+self.MATCH_SCALE)
+        match.end_x = match.start_x + 23
+        match.end_y = match.start_y + 12 
         match.shape = MatchShape.SQUARE
         
         return match
@@ -551,26 +596,24 @@ class MinimapContext:
 
         map = find_subimage(screenshot, Image.open("data/ui/map.webp"))
         map.shape = MatchShape.CIRCLE
-        self.health = map.transform(-152, -77)
-        self.prayer = map.transform(-152, -43)
-        self.run = map.transform(-142, -11)
+        self.health = map.transform(-152, -76)
+        self.prayer = map.transform(-152, -42)
+        self.run = map.transform(-142, -10)
         self.spec = map.transform(-120, 15)
 
         # make match mildly smaller
         for variable in vars(self):
             match = getattr(self, variable)
             if isinstance(match, MatchResult):
-                match.scale_px(-3)
-    
-class UIArea(Enum):
-    TOOLPLANE = 'toolplane'
-    CHAT = 'chat'
-    MINIMAP = 'minimap'
+                match.scale_px(self.MATCH_SCALE)
+                match.scale_px(-self.MATCH_SCALE)
+                match.scale_px(self.MATCH_SCALE)
+                match.scale_px(-self.MATCH_SCALE)
+                match.scale_px(self.MATCH_SCALE)
+                
 
-class UIType(Enum):
-    MODERN = 'modern'
-    CLASSIC = 'classic'
-    FIXED = 'fixed'
+    
+
     
 
 # Example usage

@@ -119,7 +119,7 @@ class MatchResult:
         self.end_x += pixels
         self.end_y += pixels
 
-    def get_cropped_match(self, image: Image.Image) -> Image.Image:
+    def crop_in(self, image: Image.Image) -> Image.Image:
         """Crop the match result from the image."""
         return image.crop((self.start_x, self.start_y, self.end_x, self.end_y))
         
@@ -336,7 +336,7 @@ def timeit(func):
         start_time = time.time()
         result = func(*args, **kwargs)
         end_time = time.time()
-        # print(f"Function '{func.__name__}' took {end_time - start_time:.4f} seconds")
+        print(f"Function '{func.__name__}' took {end_time - start_time:.4f} seconds")
         return result
     return wrapper
 

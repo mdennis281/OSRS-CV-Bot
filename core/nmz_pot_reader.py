@@ -79,7 +79,7 @@ def absorption_value(sc: Image.Image) -> str:
         sc, abs_img, min_scale=0.9, max_scale=1.1
     )
     
-    img = match.get_cropped_match(sc)
+    img = match.crop_in(sc)
 
 
 
