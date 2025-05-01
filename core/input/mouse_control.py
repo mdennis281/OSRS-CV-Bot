@@ -5,6 +5,12 @@ from __future__ import annotations
 import ctypes, math, random, time
 import pyautogui, keyboard
 from core.tools import MatchResult          # your class
+from enum import Enum
+
+class ClickType(Enum):
+    LEFT = 1
+    RIGHT = 2
+    MIDDLE = 3
 
 # ── global knobs ───────────────────────────────────────────
 user32              = ctypes.windll.user32
@@ -22,26 +28,31 @@ def _smooth_steps(total, n):
 def _block(on=True):       user32.BlockInput(bool(on))
 
 # ── click helpers (unchanged API) ──────────────────────────
-def click(x=-1, y=-1):
+def click(x=-1, y=-1, click_type=ClickType.LEFT):
     if x >= 0 and y >= 0:
         move_to(x, y)
 
     time.sleep(random.uniform(.05, .15))
-    pyautogui.click()
+    if click_type == ClickType.LEFT:
+        pyautogui.click()
+    elif click_type == ClickType.RIGHT:
+        pyautogui.rightClick()
+    elif click_type == ClickType.MIDDLE:
+        pyautogui.middleClick()
 
 def move_to_match(match: MatchResult, **kw):
     _block(True)
     try:  move_to(*match.get_point_within(), **kw)
     finally:  _block(False)
 
-def click_in_match(match: MatchResult, click_cnt=1, min_click_interval=.3, **kw):
+def click_in_match(match: MatchResult, click_cnt=1, min_click_interval=.3, click_type=ClickType.LEFT):
     _block(True)
     try:
         x, y = match.get_point_within()
-        click(x, y)
+        click(x, y, click_type=click_type)
         for _ in range(click_cnt-1):
             time.sleep(random.uniform(min_click_interval, min_click_interval*1.4))
-            click(x, y)
+            click(x, y, click_type=click_type)
     finally:  _block(False)
 
 # ── ⭐ human-like move_to() ⭐ ───────────────────────────────
