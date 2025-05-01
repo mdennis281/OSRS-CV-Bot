@@ -327,16 +327,39 @@ def find_color_box(
 
 from functools import wraps
 import time
+import inspect
 from PIL import ImageFont
 
 
 def timeit(func):
+    """Improved decorator that shows ClassName.method only when the call
+    truly originates from that class (instance or @classmethod)."""
+    qual_parts = func.__qualname__.split(".")
+    cls_name   = qual_parts[-2] if len(qual_parts) > 1 else None
+    cls_obj    = None                     # resolved lazily
+
     @wraps(func)
     def wrapper(*args, **kwargs):
-        start_time = time.time()
-        result = func(*args, **kwargs)
-        end_time = time.time()
-        # print(f"Function '{func.__name__}' took {end_time - start_time:.4f} seconds")
-        return result
+        nonlocal cls_obj
+
+        # Resolve the class object the first time we actually get called
+        if cls_obj is None and cls_name:
+            mod = inspect.getmodule(func)
+            cls_obj = getattr(mod, cls_name, None)
+
+        start = time.time()
+        try:
+            return func(*args, **kwargs)
+        finally:
+            dur   = time.time() - start
+            first = args[0] if args else None
+
+            if cls_obj and first is not None and (first is cls_obj or isinstance(first, cls_obj)):
+                label = f"{cls_name}.{func.__name__}"
+            else:
+                label = func.__name__
+
+            # print(f"{label} took {dur:.4f} s")
+
     return wrapper
 

@@ -19,6 +19,10 @@ from pathlib import Path
 import keyboard
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+import os
+
+MAXTHREAD = os.cpu_count()
+
 
 class ToolplaneTab(Enum):
     COMBAT = "combat"
@@ -391,12 +395,20 @@ class RuneLiteClient(GenericWindow):
 
     
     def on_resize(self):
-        print('resized!')
+        print("resized!")
         sc = self.get_screenshot()
-        self.minimap.find_matches(sc)
-        self.toolplane.find_matches(sc)
-        self.sectors.find_matches(sc, self.ui_type)
-        
+
+        match_jobs = [
+            (self.minimap.find_matches, (sc,),             {}),
+            (self.toolplane.find_matches, (sc,),           {}),               
+            (self.sectors.find_matches,  (sc, self.ui_type), {}),             
+            # (other_component.find_matches, (sc, ...), {}),                  
+        ]
+
+        with ThreadPoolExecutor(max_workers=min(MAXTHREAD, len(match_jobs))) as pool:
+            futures = [pool.submit(fn, *args, **kwargs) for fn, args, kwargs in match_jobs]
+            for f in futures:
+                f.result()
 
     def get_ui_type(self) -> 'UIType':
         modern_toolplane = Image.open('data/ui/toolplane-modern.png')
@@ -503,8 +515,9 @@ class ToolplaneContext:
 
         # ThreadPoolExecutor is ideal here because find_subimage is
         # largely I/O / C-extension work, not pure Python CPU.
-        with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            futures = (pool.submit(_worker, item) for item in self._template_items())
+        template_items = self._template_items()
+        with ThreadPoolExecutor(max_workers=min(MAXTHREAD, len(template_items))) as pool:
+            futures = (pool.submit(_worker, item) for item in template_items)
             for fut in as_completed(futures):
                 name, match = fut.result()
                 setattr(self, name, match)
