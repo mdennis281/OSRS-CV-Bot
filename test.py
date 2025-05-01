@@ -1,14 +1,31 @@
 from core.osrs_client import RuneLiteClient, ToolplaneTab, MinimapElement
 from core.tools import write_text_to_image
-
+from core.input.mouse_control import ClickType
+from core.tools import find_subimage, MatchResult
+from core import ocr
+from PIL import Image
+import cv2
+import time
 rl_client = RuneLiteClient()
 
-write_text_to_image(
-    rl_client.screenshot,
-    'testing the image writer',
-    color="red",
-    font_size=40
-).show()
+while True:
+    sc = rl_client.get_screenshot()
+    print(rl_client.toolplane.get_active_tab(sc))
+    time.sleep(5)
+
+#rl_client.click((200,200), click_type=ClickType.RIGHT)
+
+#rl_client.choose_right_click_opt('Walk here')
+
+#print(match)
+#print(ans.size)
+
+#match.debug_draw(ans,color=(255,255,0)).show()
+
+
+
+
+
 
 # while True:
 

@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from enum import Enum
 import pytesseract
 from core import ocr
+from typing import Tuple, Optional
 
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
@@ -178,7 +179,7 @@ def find_subimage(parent: Image.Image,
                 # TM_SQDIFF variants: lower = better, so invert
                 confidence = 1.0 - min_val
                 top_left   = min_loc
-
+                
             if confidence > best.confidence:
                 best = MatchResult(
                     start_x=top_left[0],
@@ -262,6 +263,67 @@ if __name__ == "__main__":
     
     output_image.show()
 
+def find_color_box(
+    pil_img: Image.Image,
+    target_rgb: Tuple[int, int, int],
+    tol: int = 0,
+) -> MatchResult:
+    """
+    Locate the largest rectangular outline drawn in `target_rgb`.
+    Returns the bounding box strictly INSIDE the coloured outline.
+    """
+    # ─── 1.  Make a boolean mask of pixels that match the colour ────────────────
+    img = pil_img.convert("RGB")
+    arr = np.asarray(img)
+    if tol == 0:
+        mask = np.all(arr == target_rgb, axis=2)
+    else:
+        diff = np.abs(arr - np.array(target_rgb))
+        mask = np.all(diff <= tol, axis=2)
+
+    # ─── 2.  Connected-component labelling to split separate blobs ─────────────
+    mask_u8 = mask.astype(np.uint8)
+    num, labels = cv2.connectedComponents(mask_u8, connectivity=4)
+
+    if num <= 1:
+        raise ValueError("No pixels found with the specified colour.")
+
+    # ─── 3.  Pick the blob with the most pixels (assume that is the box) ───────
+    best_label = None
+    best_area = -1
+    coords_best = None
+
+    for lbl in range(1, num):
+        coords = np.column_stack(np.where(labels == lbl))
+        area = coords.shape[0]
+        if area > best_area:
+            best_area = area
+            best_label = lbl
+            coords_best = coords
+
+    if coords_best is None:
+        raise ValueError("Could not find a coloured region.")
+
+    # coords are (row, col)
+    rows = coords_best[:, 0]
+    cols = coords_best[:, 1]
+    top, bottom = rows.min(), rows.max()
+    left, right = cols.min(), cols.max()
+
+    # shrink inside border (1 px) to guarantee we are within the outline
+    if right - left > 2 and bottom - top > 2:  # avoid negative size
+        left_in, right_in = left + 1, right - 1
+        top_in, bottom_in = top + 1, bottom - 1
+    else:  # fallback, use original
+        left_in, right_in, top_in, bottom_in = left, right, top, bottom
+
+    # confidence = coloured pixels inside / expected outline pixels
+    expected_perimeter = 2 * ((right - left) + (bottom - top))
+    confidence = best_area / max(expected_perimeter, 1)
+
+    return MatchResult(left_in, top_in, right_in, bottom_in, confidence)
+
+
 
 from functools import wraps
 import time
@@ -274,73 +336,7 @@ def timeit(func):
         start_time = time.time()
         result = func(*args, **kwargs)
         end_time = time.time()
-        #print(f"Function '{func.__name__}' took {end_time - start_time:.4f} seconds")
+        # print(f"Function '{func.__name__}' took {end_time - start_time:.4f} seconds")
         return result
     return wrapper
 
-
-
-
-# def find_and_draw_box(screenshot_path, subimage_path, output_path, tolerance=0.8, padding_x=0, padding_y=0,box_color=(0, 255, 0)):
-#     # Load images
-#     screenshot = cv2.imread(screenshot_path, cv2.IMREAD_UNCHANGED)
-#     subimage = cv2.imread(subimage_path, cv2.IMREAD_UNCHANGED)
-
-#     if screenshot is None or subimage is None:
-#         print("Error loading images.")
-#         return
-
-#     # Ignore transparent pixels in screenshot (if any)
-#     if screenshot.shape[-1] == 4:  # Has alpha channel
-#         mask = screenshot[:, :, 3] > 0
-#         screenshot = screenshot[:, :, :3]  # Remove alpha for matching
-
-#     if subimage.shape[-1] == 4:  # Remove alpha channel from subimage
-#         subimage = subimage[:, :, :3]
-
-#     # Perform template matching
-#     result = cv2.matchTemplate(screenshot, subimage, cv2.TM_CCOEFF_NORMED)
-#     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
-
-#     if max_val < tolerance:
-#         print(f"No match found within the given tolerance. {subimage_path}")
-#         return
-
-#     # Calculate bounding box coordinates
-#     start_x, start_y = max_loc
-#     end_x = start_x + subimage.shape[1]
-#     end_y = start_y + subimage.shape[0]
-
-#     # Apply padding
-#     start_x = max(0, start_x - padding_x)
-#     start_y = max(0, start_y - padding_y)
-#     end_x = min(screenshot.shape[1], end_x + padding_x)
-#     end_y = min(screenshot.shape[0], end_y + padding_y)
-
-#     # Draw rectangle around detected region
-#     cv2.rectangle(screenshot, (start_x, start_y), (end_x, end_y), box_color, 1)
-
-#     # Save the modified screenshot
-#     cv2.imwrite(output_path, screenshot)
-#     print(f"Match found at: ({start_x}, {start_y}) -> ({end_x}, {end_y})")
-#     print(f"Saved output image to: {output_path}")
-
-# # Example usage
-# TOLERANCE = 0.7
-# find_and_draw_box("runelite_screenshot.png", "data/ui/ui_inventory.png", "output.png", tolerance=.2, padding_x=3, padding_y=3,box_color=(255,0,0))
-# find_and_draw_box("output.png", "data/ui/equipment.webp", "output.png", tolerance=.6, padding_x=3, padding_y=3)
-# find_and_draw_box("output.png", "data/ui/prayer.webp", "output.png", tolerance=TOLERANCE, padding_x=3, padding_y=3)
-# find_and_draw_box("output.png", "data/ui/friends.webp", "output.png", tolerance=TOLERANCE, padding_x=3, padding_y=3)
-# find_and_draw_box("output.png", "data/ui/stats.webp", "output.png", tolerance=TOLERANCE, padding_x=3, padding_y=3)
-# find_and_draw_box("output.png", "data/ui/quests.webp", "output.png", tolerance=TOLERANCE, padding_x=3, padding_y=3)
-# find_and_draw_box("output.png", "data/ui/map.webp", "output.png", tolerance=TOLERANCE, padding_x=3, padding_y=3)
-# find_and_draw_box("output.png", "data/ui/spellbook.webp", "output.png", tolerance=TOLERANCE, padding_x=3, padding_y=3)
-# find_and_draw_box("output.png", "data/ui/inventory.webp", "output.png", tolerance=TOLERANCE, padding_x=3, padding_y=3)
-# find_and_draw_box("output.png", "data/ui/logout.webp", "output.png", tolerance=TOLERANCE, padding_x=3, padding_y=3)
-# find_and_draw_box("output.png", "data/ui/compass.webp", "output.png", tolerance=TOLERANCE, padding_x=3, padding_y=3)
-# find_and_draw_box("output.png", "data/ui/emotes.webp", "output.png", tolerance=.5, padding_x=3, padding_y=3)
-# find_and_draw_box("output.png", "data/ui/combat.webp", "output.png", tolerance=TOLERANCE, padding_x=3, padding_y=3)
-# find_and_draw_box("output.png", "data/ui/music.webp", "output.png", tolerance=.6, padding_x=3, padding_y=3)
-# find_and_draw_box("output.png", "data/ui/settings.webp", "output.png", tolerance=.5, padding_x=3, padding_y=3)
-# find_and_draw_box("output.png", "data/ui/chat.webp", "output.png", tolerance=TOLERANCE, padding_x=3, padding_y=3)
-# find_and_draw_box("output.png", "data/ui/account.webp", "output.png", tolerance=.6, padding_x=3, padding_y=3)
