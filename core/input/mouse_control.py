@@ -2,10 +2,21 @@
 human_mouse.py  –  v1.1
 """
 from __future__ import annotations
+if __name__ == "__main__":
+    import os,sys
+    sys.path.append(
+        os.path.abspath(
+            os.path.join(
+                os.path.dirname(__file__),
+                "../.."
+            )
+        )
+    )
 import ctypes, math, random, time
 import pyautogui, keyboard
 from core.tools import MatchResult          # your class
 from enum import Enum
+from typing import Tuple
 
 class ClickType(Enum):
     LEFT = 1
@@ -16,6 +27,7 @@ class ClickType(Enum):
 user32              = ctypes.windll.user32
 terminate           = False          # Esc listener toggles this
 movement_multiplier = 0.35           # lower = faster (was 0.5)
+is_simulation = False
 
 # ── helpers ────────────────────────────────────────────────
 def _euclidean(p1, p2):    return math.hypot(p2[0]-p1[0], p2[1]-p1[1])
@@ -26,6 +38,79 @@ def _bezier(p0,p1,p2,t):
 def _smooth_steps(total, n):
     return [total*(3*(i/n)**2 - 2*(i/n)**3) for i in range(1,n+1)]
 def _block(on=True):       user32.BlockInput(bool(on))
+
+def _get_direction(p1: Tuple[int, int],
+                  p2: Tuple[int, int]):
+    dx = p2[0] - p1[0]
+    dy = p2[1] - p1[1]
+    angle_rad = math.atan2(dy, dx)         # range (-π, π]
+    angle_deg = math.degrees(angle_rad)    # range (-180, 180]
+    return (angle_deg + 360) % 360         # → range [0, 360)
+# ───────────────────────────────────────────────────────────────
+#  Angle helpers  (screen-coords convention: 0° = →, 90° = ↓)
+# ───────────────────────────────────────────────────────────────
+def _norm(a: float) -> float:
+    """Normalise angle to [0, 360)."""
+    return a % 360
+
+def _angle_diff(a: float, b: float) -> float:
+    """
+    Smallest signed difference a→b (deg, –180‥+180].
+    Positive ⇒ b is clockwise from a.
+    """
+    d = (b - a + 180) % 360 - 180
+    return d if d != -180 else 180
+
+def _polar_to_xy(angle_deg: float, r: float) -> Tuple[float, float]:
+    """Convert polar (screen coords) → Δx, Δy (y grows downward)."""
+    rad = math.radians(angle_deg)
+    return r * math.cos(rad), r * math.sin(rad)
+
+
+def _constrain_travel(p1: Tuple[float, float],
+                     p2: Tuple[float, float],
+                     tp: Tuple[float, float],
+                     max_variance: float = 45
+                     ) -> Tuple[float, float]:
+    """
+    Constrain the step p1→p2 so its heading is no farther than
+    `max_variance` degrees from the direction toward the long-term
+    target point `tp`.
+
+    Parameters
+    ----------
+    p1 : (x, y)
+        Current position.
+    p2 : (x, y)
+        Proposed next position.
+    tp : (x, y)
+        Final target point we ultimately want to reach.
+    max_variance : float, default 45
+        Allowed deviation (±) from the `p1→tp` heading.
+
+    Returns
+    -------
+    (x, y)
+        New next position, keeping the same step length as p1→p2
+        but adjusted to satisfy the angle constraint.
+    """
+    dx, dy = p2[0] - p1[0], p2[1] - p1[1]
+    dist   = math.hypot(dx, dy)
+    if dist == 0:
+        return p2                       # no movement → nothing to adjust
+
+    cur_dir = _norm(math.degrees(math.atan2(dy, dx)))
+    tgt_dir = _norm(math.degrees(math.atan2(tp[1] - p1[1], tp[0] - p1[0])))
+    delta   = _angle_diff(tgt_dir, cur_dir)
+
+    # Inside the cone? keep original p2
+    if abs(delta) <= max_variance:
+        return p2
+
+    # Clamp to the closest boundary of the cone centred on target heading
+    new_dir = tgt_dir + (max_variance if delta > 0 else -max_variance)
+    new_dx, new_dy = _polar_to_xy(_norm(new_dir), dist)
+    return p1[0] + new_dx, p1[1] + new_dy
 
 # ── click helpers (unchanged API) ──────────────────────────
 def click(x=-1, y=-1, click_type=ClickType.LEFT):
@@ -55,97 +140,246 @@ def click_in_match(match: MatchResult, click_cnt=1, min_click_interval=.3, click
             click(x, y, click_type=click_type)
     finally:  _block(False)
 
-# ── ⭐ human-like move_to() ⭐ ───────────────────────────────
+# ────────────────────────────────────────────────────────────────
+#  Human-like MOVE TO  (overshoot + distance-weighted wobble)
+# ────────────────────────────────────────────────────────────────
 def move_to(
-    tx: int, ty: int,
+    tx: int,
+    ty: int,
     *,
-    overshoot_prob=.40, wobble_prob=.70, pause_prob=.18,
-    overshoot_ratio=(.07, .18), wobble_px=(1, 8), pause_max_ms=250,
+    overshoot_prob: float = .40,
+    wobble_prob:   float = .8,
+    pause_prob:    float = .18,
+    curve_prob:    float = .6,
+    overshoot_ratio=(.04, .1),
+    wobble_px=(-1, -1),  # (-1,-1)  → auto-random pair
+    curve_ratio=(.01,.25),
+
+    pause_max_ms=250,
     speed: float | None = None,
+    max_direction_change=30 # max change from point to point
 ):
-    """ Cursor travel with optional human quirks. """
-    if terminate: return
-    sx, sy       = pyautogui.position()
-    dist         = _euclidean((sx, sy), (tx, ty))
-    if dist == 0:   # already there
+    """Smooth cursor travel with human quirks."""
+    if terminate:
         return
 
-    # which quirks fire?
-    do_os  = random.random() < overshoot_prob and dist > 40
-    do_pau = random.random() < pause_prob     and dist > 80
+    if wobble_px == (-1, -1):          # randomise wobble magnitude once/run
+        lo = random.randint(2, 8)
+        wobble_px = (lo, lo + random.randint(2, 8))
 
-    # timing
-    base_dur = (dist / 700) * (movement_multiplier if speed is None else speed)
-    base_dur *= random.uniform(.85, 1.15)
-    base_dur  = max(.04, base_dur)
+    sx, sy = pyautogui.position()
+    dist0  = _euclidean((sx, sy), (tx, ty))
+    if dist0 < 1:
+        return
 
-    # way-points
-    waypoints = []
-    if do_os:
-        dx, dy  = tx - sx, ty - sy
-        ux, uy  = dx/dist, dy/dist
-        odist   = dist * random.uniform(*overshoot_ratio)
-        waypoints += [(int(tx+ux*odist), int(ty+uy*odist)), (tx, ty)]
-    else:
-        waypoints.append((tx, ty))
+    # ── pick way-points  ───────────────
+    
+    waypoints: list[tuple[int, int]] = []
+    # ── curve
+    if random.random() < curve_prob and dist0 > 40:
+        midpoint = ((sx + tx) / 2, (sy + ty) / 2)
+        # determine how much off the midpoint the curve should be
+        change = (
+            random.randint(int(curve_ratio[0]*dist0), int(curve_ratio[1]*dist0)),
+            random.randint(int(curve_ratio[0]*dist0), int(curve_ratio[1]*dist0))
+        )
+        curvepoint = (
+            int( midpoint[0] + random.choice([change[0], -change[0]]) ),
+            int( midpoint[1] + random.choice([change[1], -change[1]]) ),
+        )
+        waypoints.append(curvepoint)
+
+
+
+    
+    # ── overshoot
+    
+    if random.random() < overshoot_prob and dist0 > 40:
+        ux, uy = (tx - sx) / dist0, (ty - sy) / dist0
+        o_dist = dist0 * random.uniform(*overshoot_ratio)
+        waypoints.append((int(tx + ux * o_dist), int(ty + uy * o_dist)))
+    waypoints.append((tx, ty))                       # always the real target
+    last_leg = len(waypoints) - 1                   # index of final leg
+
+    
+    
 
     _block(True)
     try:
         prev = (sx, sy)
-        for wp in waypoints:
-            seg = _euclidean(prev, wp)
-            steps = max(6, int(seg/12))
-            t_stamps = _smooth_steps(base_dur*(seg/dist), steps)
+        for leg_idx, wp in enumerate(waypoints):
+            
+            def _execute_step(prev, duration, min_steps=6):
+                step_start = time.time()
+                seg      = _euclidean(prev, wp)
+                if seg < 1: return
+                steps    = max(min_steps, int(seg / 12))
+                t_stamps = _smooth_steps(base_dur * (seg / dist0), steps)
 
-            ctrl = (_lerp(prev[0], wp[0], .33)+random.randint(-15,15),
-                    _lerp(prev[1], wp[1], .33)+random.randint(-15,15))
+                # distance decay uses this segment’s full length
+                seg_total = seg
 
-            for i, tgt_t in enumerate(t_stamps, 1):
-                if terminate: return
-                frac = i/steps
-                x, y = _bezier(prev, ctrl, wp, frac)
+                ctrl = (
+                    _lerp(prev[0], wp[0], .33) + random.randint(-15, 15),
+                    _lerp(prev[1], wp[1], .33) + random.randint(-15, 15),
+                )
+                for i, tgt_t in enumerate(t_stamps, 1):
+                    if terminate:
+                        return
 
-                # wobble
-                if random.random() < wobble_prob:
-                    dx, dy = wp[0]-prev[0], wp[1]-prev[1]
-                    if dx or dy:
-                        perp = (-dy, dx); norm = math.hypot(*perp)
-                        perp = (perp[0]/norm, perp[1]/norm)
-                        mag  = random.randint(*wobble_px) * (1-frac)
-                        x, y = x+perp[0]*mag, y+perp[1]*mag
+                    frac   = i / steps
+                    x, y   = _bezier(prev, ctrl, wp, frac)
+                    wobble = random.random() < wobble_prob * ((   # decay
+                        (_euclidean((x, y), wp) / seg_total) ** 1.7)
+                    )
 
-                # dont allow sub-zero
-                if x < 1: x = 1
-                if y < 1: y = 1
+                    # tighten wobble on the *very last* leg
+                    if leg_idx == last_leg:
+                        wobble = wobble and (random.random() < .15)
+                        wob_px = (1, 4)
+                    else:
+                        wob_px = wobble_px
 
-                pyautogui.moveTo(int(x), int(y), _pause=0)
+                    if wobble:
+                        dx, dy = wp[0] - prev[0], wp[1] - prev[1]
+                        if dx or dy:
+                            perp = (-dy, dx)
+                            norm = math.hypot(*perp) or 1.0
+                            perp = (perp[0] / norm, perp[1] / norm)
+                            a,b = perp
+                            perp = (random.choice([-a,a]),random.choice([-b,b]))
+                            mag  = random.randint(*wob_px) * (1 - frac)
+                            x, y = x + perp[0] * mag, y + perp[1] * mag
 
-                # micro-pause
-                if do_pau and .45 < frac < .55 and random.random() < .1:
-                    time.sleep(random.uniform(.03, pause_max_ms/1000))
+                    
+                    x,y = _constrain_travel(
+                        pyautogui.position(),(x,y),wp,
+                        max_direction_change
+                    )
 
-                # ease timing
-                if i==1: start = time.perf_counter()
-                else:
-                    sleep = max(0, tgt_t - (time.perf_counter()-start))
-                    time.sleep(sleep)
+                    x = max(1, int(x))
+                    y = max(1, int(y))
+                    pyautogui.moveTo(x, y, _pause=0)
+                    if wobble:
+                        remain = time.time() - step_start - duration
+                        _execute_step((x,y),remain,steps-i)
+                        return
+
+                    # occasional micro-pause
+                    if not is_simulation:
+                        if (
+                            pause_prob > 0
+                            and leg_idx == 0
+                            and .45 < frac < .55
+                            and random.random() < .10
+                        ):
+                            time.sleep(random.uniform(.03, pause_max_ms / 1000))
+
+                        # easing clock
+                        if i == 1:
+                            start = time.perf_counter()
+                        else:
+                            time.sleep(max(0, tgt_t - (time.perf_counter() - start)))
+
+            # ── timing baseline (cubic ease) ─────────────────────────────────
+            step_distance = _euclidean(prev, wp)
+            base_dur = (step_distance / 700) * (movement_multiplier if speed is None else speed)
+            base_dur = max(.04, base_dur * random.uniform(.85, 1.15))
+            # run
+            _execute_step(prev,base_dur)
             prev = wp
+            
     finally:
         _block(False)
 
-# ── ✔  random double click (restored) ──────────────────────
+# ────────────────────────────────────────────────────────────────
+#  RANDOM DOUBLE-CLICK  (unchanged)
+# ────────────────────────────────────────────────────────────────
 def random_double_click(x, y, variance=5, **move_kw):
-    if terminate: return
+    if terminate:
+        return
     _block(True)
     try:
-        pyautogui.mouseUp()                       # drop any drag
-        tx = x + random.randint(-abs(variance),  abs(variance))
-        ty = y + random.randint(-abs(variance),  abs(variance))
-        move_to(tx, ty, **move_kw)               # first travel
+        pyautogui.mouseUp()
+        tx = x + random.randint(-variance, variance)
+        ty = y + random.randint(-variance, variance)
+        move_to(tx, ty, **move_kw)     # primary travel
         pyautogui.click()
         time.sleep(random.uniform(.12, .35))
-        move_to(tx, ty, overshoot_prob=0)        # re-settle
+        move_to(tx, ty, overshoot_prob=0)  # settle
         pyautogui.click()
     finally:
         _block(False)
 
+# ────────────────────────────────────────────────────────────────
+#  LIGHTWEIGHT VISUAL SIMULATOR  (run with  `--sim`)
+# ────────────────────────────────────────────────────────────────
+if __name__ == "__main__":
+    import argparse, sys
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--sim", action="store_true", help="run visual path demo")
+    args = parser.parse_args()
+
+    if not args.sim:
+        sys.exit(0)
+
+    is_simulation = True
+
+    # --- sim deps kept optional so production imports stay lean -----
+    from PIL import Image, ImageDraw, ImageColor
+    import numpy as np
+
+    W = H = 1000
+    STARTS = [
+        (int(W//20), int(W//20)),
+        (H-int(H//20), int(W//20)),
+        (int(H//20), W-int(W//20)),
+        (H-int(H//20), W-int(W//20)),
+        
+        (int(H//20), int(W//2)),
+        (H-int(H//20), int(W//2)),
+        (int(W/2), int(W//20)),
+        (int(W/2), H-int(W//20))
+    ]
+    TARGET = (W // 2, H // 2)
+
+    def simulate(sim_cnt=1):
+        global pyautogui
+        img = Image.new("RGB", (W, H), (30, 30, 30))
+        draw = ImageDraw.Draw(img)
+        draw.rectangle([TARGET[0] - 7, TARGET[1] - 7, TARGET[0] + 7, TARGET[1] + 7],
+                    outline="white", width=2)
+        
+        # stub-pyautogui for off-screen drawing
+        class _StubAG:
+            _pos = (0,0)
+            _color = (255,0,0)
+            @classmethod
+            def position(cls):
+                return tuple(cls._pos)
+            @classmethod
+            def moveTo(cls, x, y, _pause=0):
+                draw.line([cls._pos, (x, y)], fill=cls._color, width=1)
+                #draw.rectangle([(x-1,y-1),(x+1,y+1)],"blue")
+                cls._pos = [x, y]
+        pyautogui = _StubAG  # type: ignore
+        for start in STARTS:
+            
+            draw.rectangle([start[0] - 10, start[1] - 10, start[0] + 10, start[1] + 10],
+                    fill="cyan")
+            for seed in range(sim_cnt):
+                pyautogui._pos = start
+                # random.seed(seed); np.random.seed(seed)
+
+                move_to(
+                    *TARGET,
+                    pause_prob=0,
+                    overshoot_prob=.4
+                )
+
+        img.show()          # opens default viewer; close it to end sim
+    
+    simulate(1)
+    # simulate(10)
+    # simulate(100)
+    # simulate(1000)
