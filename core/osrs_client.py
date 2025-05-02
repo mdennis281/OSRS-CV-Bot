@@ -271,16 +271,13 @@ class RuneLiteClient(GenericWindow):
         if stat:
             return int(stat)
         return None
-            
-    @timeit
-    def click_item(
+    
+    def find_item(
             self,
             item_identifier: str | int,
             tab: ToolplaneTab = ToolplaneTab.INVENTORY,
-            click_cnt: int = 1,
             min_confidence=0.97,
-            min_click_interval: float = 0.3
-    ):
+        ) -> MatchResult:
         self.get_screenshot()
         self.click_toolplane(tab)
 
@@ -301,6 +298,23 @@ class RuneLiteClient(GenericWindow):
         
         if match.confidence < min_confidence:
             raise ValueError(f"Item {item.name} not found in window. Confidence: {match.confidence}")
+            
+    @timeit
+    def click_item(
+            self,
+            item_identifier: str | int,
+            tab: ToolplaneTab = ToolplaneTab.INVENTORY,
+            click_cnt: int = 1,
+            min_confidence=0.97,
+            min_click_interval: float = 0.3
+    ):
+        
+        match = self.find_item(
+            item_identifier,
+            tab,
+            min_confidence
+        )
+        
             
         self.click(
             match, click_cnt=click_cnt, 
@@ -594,7 +608,7 @@ class MinimapContext:
         match = match.transform(-22+self.MATCH_SCALE, 13+self.MATCH_SCALE)
         match.end_x = match.start_x + 23
         match.end_y = match.start_y + 12 
-        match.shape = MatchShape.SQUARE
+        match.shape = MatchShape.RECT
         
         return match
 
@@ -607,7 +621,7 @@ class MinimapContext:
         """Finds and sets the matches for health, prayer, run, and spec."""
 
         map = find_subimage(screenshot, Image.open("data/ui/map.webp"))
-        map.shape = MatchShape.CIRCLE
+        map.shape = MatchShape.ELIPSE
         self.health = map.transform(-152, -76)
         self.prayer = map.transform(-152, -42)
         self.run = map.transform(-142, -10)
