@@ -54,6 +54,7 @@ def main():
             rest_sec = random.randint(*REST_RANGE)
             print(f'Resting for {rest_sec}s')
             client.move_off_window()
+            overlap_point = overlap_match.get_point_within()
             time.sleep(rest_sec)
     duration = tools.seconds_to_hms(time.time() - start_time)
     
