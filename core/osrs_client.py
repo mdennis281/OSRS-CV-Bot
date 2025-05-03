@@ -304,7 +304,6 @@ class RuneLiteClient(GenericWindow):
         icon = item.icon
 
         if crop:
-            crop[2] = icon.width - crop
             icon = icon.crop((
                 crop[0],
                 crop[1],
