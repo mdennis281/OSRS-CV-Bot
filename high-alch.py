@@ -31,7 +31,10 @@ def main():
     # prob already there but sanity check
     client.click_toolplane(ToolplaneTab.SPELLS)
 
-    overlap_point = overlap_match.get_point_within()
+    try:
+        overlap_point = overlap_match.get_point_within()
+    except AttributeError as e:
+        raise RuntimeError('Make sure the item and high alch are on top of each other')
 
 
     for i in range(alch_count):
