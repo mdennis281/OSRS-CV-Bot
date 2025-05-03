@@ -167,7 +167,7 @@ def listen_for_debug():
     while True:
         if keyboard.is_pressed('`'):
             print("Debugging...")
-            rl_client.debug_minimap()
+            rl_client.debug_minimap().show()
             rl_client.debug_toolplane()
         time.sleep(0.1)
 
