@@ -310,6 +310,7 @@ class RuneLiteClient(GenericWindow):
                 icon.width-crop[2],
                 icon.height-crop[3]
             ))
+            icon.show()
 
 
         if not isinstance(item, Item):
