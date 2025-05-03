@@ -342,7 +342,7 @@ class RuneLiteClient(GenericWindow):
             min_confidence,
             crop=(0,top_crop,0,0) # crop top off
         )
-        match.start_y = match.start_y - 5 - int(top_crop/2)
+        match.start_y = match.start_y - 5
         match.start_x = match.start_x - 3
         match.end_y = match.start_y + 15
         match.end_x = match.start_x + 30
