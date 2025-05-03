@@ -663,7 +663,7 @@ class MinimapContext:
     prayer: MatchResult = None
     run: MatchResult = None
     spec: MatchResult = None
-    MATCH_SCALE = 0#-4 #px
+    MATCH_SCALE = -4 #px
 
     def get_minimap_match(self,match: MatchResult, screenshot: Image.Image) -> MatchResult:
         """Returns the match object for the given match."""
@@ -693,11 +693,12 @@ class MinimapContext:
         for variable in vars(self):
             match = getattr(self, variable)
             if isinstance(match, MatchResult):
-                match.scale_px(self.MATCH_SCALE)
-                match.scale_px(-self.MATCH_SCALE)
-                match.scale_px(self.MATCH_SCALE)
-                match.scale_px(-self.MATCH_SCALE)
-                match.scale_px(self.MATCH_SCALE)
+                m: MatchResult = match.scale_px(self.MATCH_SCALE)
+                match.start_x = m.start_x
+                match.start_y = m.start_y
+                match.end_x = m.end_x
+                m.end_y = m.end_y
+                
                 
 
     
