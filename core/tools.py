@@ -385,3 +385,21 @@ def timeit(func):
 
     return wrapper
 
+def seconds_to_hms(total_seconds: float | int) -> str:
+    """
+    Convert seconds → `HH:MM:SS` (hours may exceed 24 if you like).
+
+    Examples
+    --------
+    >>> seconds_to_hms(3661)
+    '01:01:01'
+    >>> seconds_to_hms(98765.4)
+    '27:26:05'
+    """
+    # Round to nearest second (change to int(total_seconds) for simple truncation)
+    total_seconds = int(round(total_seconds))
+
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+
+    return f"{hours:02}:{minutes:02}:{seconds:02}"

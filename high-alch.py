@@ -1,5 +1,6 @@
 from core.osrs_client import RuneLiteClient, ToolplaneTab
 from PIL import Image
+from core import tools
 import time
 import random
 import threading
@@ -18,6 +19,7 @@ TAB_CHECK_RANGE = (.5,1.75)
 terminate = False
 
 def main():
+    start_time = time.time()
     nattys, items = init(ITEM_TO_ALCH)
 
     print(f'Found: {nattys} nattys & {items} items')
@@ -52,6 +54,9 @@ def main():
             print(f'Resting for {rest_sec}s')
             client.move_off_window()
             time.sleep(rest_sec)
+    duration = tools.seconds_to_hms(time.time() - start_time)
+    
+    print(f'All done. Alched {alch_count} items in {duration}')
 
 
     
