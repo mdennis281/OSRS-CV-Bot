@@ -36,7 +36,7 @@ def main():
 
     for i in range(alch_count):
         while get_active_tab() != 'spells':
-            time.sleep(random.randrange(*TAB_CHECK_RANGE))
+            time.sleep(random.uniform(*TAB_CHECK_RANGE))
             if terminate: return
         if terminate: return
         client.click(overlap_point, click_cnt=2)
