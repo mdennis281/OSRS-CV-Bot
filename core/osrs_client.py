@@ -336,7 +336,7 @@ class RuneLiteClient(GenericWindow):
             tab: ToolplaneTab = ToolplaneTab.INVENTORY,
             min_confidence=0.97
         ):
-        top_crop = 15
+        top_crop = 10
         match = self.find_item(
             item_identifier,
             tab,
