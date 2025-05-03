@@ -346,7 +346,6 @@ class RuneLiteClient(GenericWindow):
         match.start_x = match.start_x - 3
         match.end_y = match.start_y + 15
         match.end_x = match.start_x + 30
-        match.debug_draw(self.screenshot).show()
 
         try:
             return match.extract_number(
@@ -355,7 +354,7 @@ class RuneLiteClient(GenericWindow):
             )
             
         except Exception as e: 
-
+            match.debug_draw(self.screenshot).show()
             print('failed on item:',item_identifier)
             return 0
             
