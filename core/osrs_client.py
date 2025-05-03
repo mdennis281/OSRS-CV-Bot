@@ -445,6 +445,8 @@ class RuneLiteClient(GenericWindow):
         self.minimap.run.debug_draw(self.screenshot, color=(255, 0, 0))
         self.minimap.spec.debug_draw(self.screenshot, color=(255, 255, 0))
         find_subimage(self.screenshot, Image.open("data/ui/map.webp")).debug_draw(self.screenshot, color=(255, 255, 255))
+        self.minimap.get_minimap_match(self.minimap.health).debug_draw(self.screenshot,color=(255,255,255))
+        self.minimap.get_minimap_match(self.minimap.run).debug_draw(self.screenshot,color=(255,255,255))
         # health_val = self.minimap.get_minimap_stat(self.minimap.health, self.screenshot)
         # # print(f"Health: {health_val}")
         # prayer_val = self.minimap.get_minimap_stat(self.minimap.prayer, self.screenshot)
