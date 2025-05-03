@@ -318,7 +318,7 @@ class RuneLiteClient(GenericWindow):
         
         sc = self.sectors.toolplane.crop_in(self.screenshot)
         match = self.find_in_window(
-            item.icon, sc 
+            item.icon, sc, min_scale=1,max_scale=1
         )
 
         print(f"{item.name} | Confidence: {round(match.confidence*100,2)}%")
@@ -336,7 +336,7 @@ class RuneLiteClient(GenericWindow):
             tab: ToolplaneTab = ToolplaneTab.INVENTORY,
             min_confidence=0.97
         ):
-        top_crop = 10
+        top_crop = 13
         match = self.find_item(
             item_identifier,
             tab,
