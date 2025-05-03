@@ -333,11 +333,13 @@ class RuneLiteClient(GenericWindow):
         match.end_y = match.start_y + 15
         match.end_x = match.start_x + 30
 
-
-        return match.extract_number(
-            self.screenshot,
-            FontChoice.RUNESCAPE_SMALL
-        )
+        try:
+            return match.extract_number(
+                self.screenshot,
+                FontChoice.RUNESCAPE_SMALL
+            )
+        except Exception as e: 
+            match.debug_draw(self.screenshot).show()
         
          
 
