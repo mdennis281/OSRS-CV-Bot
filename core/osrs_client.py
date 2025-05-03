@@ -291,6 +291,7 @@ class RuneLiteClient(GenericWindow):
             item_identifier: str | int,
             tab: ToolplaneTab = ToolplaneTab.INVENTORY,
             min_confidence=0.97,
+            crop: Tuple[int,int,int,int] = None # left top right bottom
         ) -> MatchResult:
         self.get_screenshot()
         self.click_toolplane(tab)
@@ -300,6 +301,18 @@ class RuneLiteClient(GenericWindow):
         elif isinstance(item_identifier, int):
             item = self.item_db.get_item_by_id(item_identifier)
         
+        icon = item.icon
+
+        if crop:
+            crop[2] = icon.width - crop
+            icon = icon.crop((
+                crop[0],
+                crop[1],
+                icon.width-crop[2],
+                icon.height-crop[3]
+            ))
+
+
         if not isinstance(item, Item):
             raise ValueError(f'Item : {item_identifier} not found in database.')
         
@@ -326,7 +339,8 @@ class RuneLiteClient(GenericWindow):
         match = self.find_item(
             item_identifier,
             tab,
-            min_confidence
+            min_confidence,
+            crop=(0,20,0,0) # crop top off
         )
         match.start_y = match.start_y - 5
         match.start_x = match.start_x - 3
