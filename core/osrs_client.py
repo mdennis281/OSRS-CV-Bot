@@ -355,6 +355,8 @@ class RuneLiteClient(GenericWindow):
             )
         except Exception as e: 
             match.debug_draw(self.screenshot).show()
+            print('failed on item:',item_identifier)
+            return 0
             
         
          
