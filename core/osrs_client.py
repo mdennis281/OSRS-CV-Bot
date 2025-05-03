@@ -310,6 +310,7 @@ class RuneLiteClient(GenericWindow):
                 icon.width-crop[2],
                 icon.height-crop[3]
             ))
+            icon.show()
 
 
         if not isinstance(item, Item):
@@ -353,6 +354,7 @@ class RuneLiteClient(GenericWindow):
             )
         except Exception as e: 
             match.debug_draw(self.screenshot).show()
+            
         
          
 
