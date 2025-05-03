@@ -8,6 +8,7 @@ import threading
 import keyboard
 import random
 import time
+import traceback
 import cv2
 import math
 
@@ -59,6 +60,7 @@ def main_loop():
                 failcount = 0
             except Exception as e:
                 print(f"Error in flick routine: {e}")
+                print(traceback.format_exc())
                 failcount += 1
                 if failcount > 5:
                     print("Too many errors, terminating...")
