@@ -8,9 +8,12 @@ import keyboard
 ITEM_TO_ALCH = 1396 # water battlestaff (noted)
 client = RuneLiteClient('')
 
-CHANCE_CHANGE_POINT = .005
+CHANCE_CHANGE_POINT = .01
 CHANCE_REST = .008
 REST_RANGE = (5,35)
+
+# interval to check that alch is done (makes it more human)
+TAB_CHECK_RANGE = (.5,1.75)
 
 terminate = False
 
@@ -31,7 +34,7 @@ def main():
 
     for i in range(alch_count):
         while get_active_tab() != 'spells':
-            time.sleep(.3)
+            time.sleep(random.randint(*TAB_CHECK_RANGE))
             if terminate: return
         if terminate: return
         client.click(overlap_point, click_cnt=2)
@@ -47,6 +50,7 @@ def main():
         if random.random() < CHANCE_REST:
             rest_sec = random.randint(*REST_RANGE)
             print(f'Resting for {rest_sec}s')
+            client.move_off_window()
             time.sleep(rest_sec)
 
 
