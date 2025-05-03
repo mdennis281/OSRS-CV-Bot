@@ -5,7 +5,7 @@ import time
 from PIL import Image
 import io
 from core.tools import find_subimage, MatchResult, MatchShape, timeit, write_text_to_image
-from core.input.mouse_control import click_in_match, move_to, ClickType
+from core.input.mouse_control import click_in_match, move_to, ClickType, click
 from core.ocr import FontChoice, OcrError, find_string_bounds
 from typing import Tuple, List
 import threading
@@ -196,24 +196,38 @@ class GenericWindow:
             click_cnt:int=1, min_click_interval: float = 0.3, 
             click_type=ClickType.LEFT, parent_sectors: List[MatchResult]=[]):
         """Clicks on the center of the matched area."""
-        if isinstance(match, tuple):
-            x, y = match
-            match = MatchResult(x-1, y-1, x+1, y+1)
+        
 
 
         # subimage in subimage, revert back to sc match
 
-        for sector in parent_sectors:
-            match = match.transform(sector.start_x,sector.start_y)
-        
-        match = match.transform(self.window.left, self.window.top)
-        
         self.bring_to_focus()
-        click_in_match(
-            match, click_cnt=click_cnt, 
-            min_click_interval=min_click_interval,
-            click_type=click_type
-        )
+
+        
+        
+        
+
+        if isinstance(match, tuple):
+            x,y = match
+            # todo: sector support???
+            x += self.window.left
+            y += self.window.top
+            click(
+                x,y,
+                click_type=click_type,
+                click_cnt=click_cnt, 
+                min_click_interval=min_click_interval,
+            )
+        else:
+            for sector in parent_sectors:
+                match = match.transform(sector.start_x,sector.start_y)
+        
+            match = match.transform(self.window.left, self.window.top)
+            click_in_match(
+                match, click_cnt=click_cnt, 
+                min_click_interval=min_click_interval,
+                click_type=click_type
+            )
 
 
         
@@ -298,6 +312,35 @@ class RuneLiteClient(GenericWindow):
         
         if match.confidence < min_confidence:
             raise ValueError(f"Item {item.name} not found in window. Confidence: {match.confidence}")
+        plane = self.sectors.toolplane
+        match = match.transform(plane.start_x,plane.start_y)
+
+        return match
+
+    def get_item_cnt(
+            self,
+            item_identifier: str | int,
+            tab: ToolplaneTab = ToolplaneTab.INVENTORY,
+            min_confidence=0.97
+        ):
+        match = self.find_item(
+            item_identifier,
+            tab,
+            min_confidence
+        )
+        match.start_y = match.start_y - 5
+        match.start_x = match.start_x - 3
+        match.end_y = match.start_y + 15
+        match.end_x = match.start_x + 30
+
+
+        return match.extract_number(
+            self.screenshot,
+            FontChoice.RUNESCAPE_SMALL
+        )
+        
+         
+
             
     @timeit
     def click_item(
@@ -319,7 +362,6 @@ class RuneLiteClient(GenericWindow):
         self.click(
             match, click_cnt=click_cnt, 
             min_click_interval=min_click_interval,
-            parent_sectors=[self.sectors.toolplane]
         )
 
 

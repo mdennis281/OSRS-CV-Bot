@@ -113,17 +113,38 @@ def _constrain_travel(p1: Tuple[float, float],
     return p1[0] + new_dx, p1[1] + new_dy
 
 # ── click helpers (unchanged API) ──────────────────────────
-def click(x=-1, y=-1, click_type=ClickType.LEFT):
-    if x >= 0 and y >= 0:
-        move_to(x, y)
+def click(
+        x=-1, y=-1, 
+        click_type=ClickType.LEFT,
+        click_cnt=1, min_click_interval=.3):
+    def _do_click():
+        time.sleep(random.uniform(.05, .15))
+        duration = random.uniform(.05, .25)
+        if click_type == ClickType.LEFT:
+            pyautogui.click(duration=duration)
+        elif click_type == ClickType.RIGHT:
+            pyautogui.rightClick(duration=duration)
+        elif click_type == ClickType.MIDDLE:
+            pyautogui.middleClick(duration=duration)
 
-    time.sleep(random.uniform(.05, .15))
-    if click_type == ClickType.LEFT:
-        pyautogui.click()
-    elif click_type == ClickType.RIGHT:
-        pyautogui.rightClick()
-    elif click_type == ClickType.MIDDLE:
-        pyautogui.middleClick()
+    _block(True)
+    try:
+        is_already_there = pyautogui.position() == (x,y)
+        if x >= 0 and y >= 0 and not is_already_there:
+            move_to(x, y)
+
+        _do_click()
+        for _ in range(click_cnt-1):
+            time.sleep(random.uniform(min_click_interval, min_click_interval*1.4))
+            _do_click()
+    finally:
+        _block(False)
+
+    
+    
+    
+
+    
 
 def move_to_match(match: MatchResult, **kw):
     _block(True)
@@ -131,14 +152,10 @@ def move_to_match(match: MatchResult, **kw):
     finally:  _block(False)
 
 def click_in_match(match: MatchResult, click_cnt=1, min_click_interval=.3, click_type=ClickType.LEFT):
-    _block(True)
-    try:
-        x, y = match.get_point_within()
-        click(x, y, click_type=click_type)
-        for _ in range(click_cnt-1):
-            time.sleep(random.uniform(min_click_interval, min_click_interval*1.4))
-            click(x, y, click_type=click_type)
-    finally:  _block(False)
+    
+    x, y = match.get_point_within()
+    click(x, y, click_type, click_cnt, min_click_interval)
+
 
 # ────────────────────────────────────────────────────────────────
 #  Human-like MOVE TO  (overshoot + distance-weighted wobble)

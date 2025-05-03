@@ -5,123 +5,124 @@ from dataclasses import dataclass
 from enum import Enum
 import pytesseract
 from core import ocr
-from typing import Tuple, Optional
+from typing import Tuple, Optional, List
+from core.region_match import MatchResult, ShapeResult, MatchShape
 
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
-class MatchShape(Enum):
-    SQUARE = "square"
-    CIRCLE = "circle"
+# class MatchShape(Enum):
+#     RECT = "square"
+#     ELIPSE = "circle"
 
-@dataclass
-class MatchResult:
-    start_x: int
-    start_y: int
-    end_x: int
-    end_y: int
-    confidence: float = -1.0
-    scale: float = 1.0
-    shape: MatchShape = MatchShape.SQUARE
+# @dataclass
+# class MatchResult:
+#     start_x: int
+#     start_y: int
+#     end_x: int
+#     end_y: int
+#     confidence: float = -1.0
+#     scale: float = 1.0
+#     shape: MatchShape = MatchShape.RECT
 
-    def get_point_within(self) -> tuple[int, int]:
-        """Uniform random pixel strictly inside the rectangle/ellipse."""
-        # ── rectangle ────────────────────────────────────────────────
-        if self.shape is MatchShape.SQUARE:
-            return (
-                np.random.randint(self.start_x, self.end_x),
-                np.random.randint(self.start_y, self.end_y),
-            )
+#     def get_point_within(self) -> tuple[int, int]:
+#         """Uniform random pixel strictly inside the rectangle/ellipse."""
+#         # ── rectangle ────────────────────────────────────────────────
+#         if self.shape is MatchShape.RECT:
+#             return (
+#                 np.random.randint(self.start_x, self.end_x),
+#                 np.random.randint(self.start_y, self.end_y),
+#             )
 
-        # ── ellipse ─────────────────────────────────────────────────
-        cx, cy = (self.start_x + self.end_x) / 2, (self.start_y + self.end_y) / 2
-        rx, ry = (self.end_x - self.start_x) / 2, (self.end_y - self.start_y) / 2
+#         # ── ellipse ─────────────────────────────────────────────────
+#         cx, cy = (self.start_x + self.end_x) / 2, (self.start_y + self.end_y) / 2
+#         rx, ry = (self.end_x - self.start_x) / 2, (self.end_y - self.start_y) / 2
 
-        if rx <= 0 or ry <= 0:            # degenerate → centre point
-            return int(cx), int(cy)
+#         if rx <= 0 or ry <= 0:            # degenerate → centre point
+#             return int(cx), int(cy)
 
-        # rejection-sample integer pixels until one lands inside
-        while True:
-            x = np.random.randint(self.start_x, self.end_x)
-            y = np.random.randint(self.start_y, self.end_y)
-            dx = (x + 0.5) - cx           # +0.5 → test pixel-centre, not corner
-            dy = (y + 0.5) - cy
-            if (dx / rx) ** 2 + (dy / ry) ** 2 <= 1:
-                return x, y
+#         # rejection-sample integer pixels until one lands inside
+#         while True:
+#             x = np.random.randint(self.start_x, self.end_x)
+#             y = np.random.randint(self.start_y, self.end_y)
+#             dx = (x + 0.5) - cx           # +0.5 → test pixel-centre, not corner
+#             dy = (y + 0.5) - cy
+#             if (dx / rx) ** 2 + (dy / ry) ** 2 <= 1:
+#                 return x, y
     
-    def debug_draw(self, image: Image.Image, color="red", padding_x=0, padding_y=0) -> Image.Image:
-        """Draw the match result on the image."""
-        if self.shape == MatchShape.SQUARE:
-            draw = ImageDraw.Draw(image)
-            draw.rectangle([self.start_x - padding_x, self.start_y - padding_y, 
-                            self.end_x + padding_x, self.end_y + padding_y], 
-                           outline=color, width=2)
-        elif self.shape == MatchShape.CIRCLE:
-            draw = ImageDraw.Draw(image)
-            center_x = (self.start_x + self.end_x) // 2
-            center_y = (self.start_y + self.end_y) // 2
-            radius_x = (self.end_x - self.start_x) // 2 + padding_x
-            radius_y = (self.end_y - self.start_y) // 2 + padding_y
-            draw.ellipse([center_x - radius_x, center_y - radius_y, 
-                          center_x + radius_x, center_y + radius_y], 
-                         outline=color, width=2)
+#     def debug_draw(self, image: Image.Image, color="red", padding_x=0, padding_y=0) -> Image.Image:
+#         """Draw the match result on the image."""
+#         if self.shape == MatchShape.RECT:
+#             draw = ImageDraw.Draw(image)
+#             draw.rectangle([self.start_x - padding_x, self.start_y - padding_y, 
+#                             self.end_x + padding_x, self.end_y + padding_y], 
+#                            outline=color, width=2)
+#         elif self.shape == MatchShape.ELIPSE:
+#             draw = ImageDraw.Draw(image)
+#             center_x = (self.start_x + self.end_x) // 2
+#             center_y = (self.start_y + self.end_y) // 2
+#             radius_x = (self.end_x - self.start_x) // 2 + padding_x
+#             radius_y = (self.end_y - self.start_y) // 2 + padding_y
+#             draw.ellipse([center_x - radius_x, center_y - radius_y, 
+#                           center_x + radius_x, center_y + radius_y], 
+#                          outline=color, width=2)
             
-        return image
+#         return image
     
-    def extract_number(self, image: Image.Image, font: ocr.FontChoice = ocr.FontChoice.AUTO) -> str:
-        """Extract text from the match result area."""
-        img = image.crop((self.start_x, self.start_y, self.end_x, self.end_y))
-        # Use OCR or any other method to extract text from cropped_image
-        # For now, we will just return a placeholder string
+    # def extract_number(self, image: Image.Image, font: ocr.FontChoice = ocr.FontChoice.AUTO) -> str:
+    #     """Extract text from the match result area."""
+    #     img = image.crop((self.start_x, self.start_y, self.end_x, self.end_y))
+    #     # Use OCR or any other method to extract text from cropped_image
+    #     # For now, we will just return a placeholder string
 
-        rgba = np.array(img)
+    #     rgba = np.array(img)
 
-        # 1. HSV masking to isolate colored text
-        bgr = cv2.cvtColor(rgba, cv2.COLOR_RGBA2BGR)
-        hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
+    #     # 1. HSV masking to isolate colored text
+    #     bgr = cv2.cvtColor(rgba, cv2.COLOR_RGBA2BGR)
+    #     hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
         
         
-        lower_hsv = np.array([ 0, 250, 250], dtype=np.uint8)
-        upper_hsv = np.array([ 65, 255, 255], dtype=np.uint8)
-        hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
-        mask = cv2.inRange(hsv, lower_hsv, upper_hsv)
-        #mask = sum([cv2.inRange(hsv, lo, hi) for lo, hi in ranges])
-        isolated = cv2.bitwise_and(rgba, rgba, mask=mask)
+    #     lower_hsv = np.array([ 0, 250, 250], dtype=np.uint8)
+    #     upper_hsv = np.array([ 65, 255, 255], dtype=np.uint8)
+    #     hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
+    #     mask = cv2.inRange(hsv, lower_hsv, upper_hsv)
+    #     #mask = sum([cv2.inRange(hsv, lo, hi) for lo, hi in ranges])
+    #     isolated = cv2.bitwise_and(rgba, rgba, mask=mask)
 
-        # 2. Grayscale + Otsu threshold
-        gray = cv2.cvtColor(isolated, cv2.COLOR_RGBA2GRAY)
-        _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        #binary = cv2.bitwise_not(binary)
-        processed = Image.fromarray(binary)
-        ans = ocr.get_number(
-            processed,
-            font=font, #font,
-            preprocess=False
-        ) # , font)
-        return ans
+    #     # 2. Grayscale + Otsu threshold
+    #     gray = cv2.cvtColor(isolated, cv2.COLOR_RGBA2GRAY)
+    #     _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    #     #binary = cv2.bitwise_not(binary)
+    #     processed = Image.fromarray(binary)
+    #     ans = ocr.get_number(
+    #         processed,
+    #         font=font, #font,
+    #         preprocess=False
+    #     ) # , font)
+    #     return ans
 
 
-    def transform(self,offset_x: int, offset_y: int) -> 'MatchResult':
-        """Transform the match result by applying an offset."""
-        return MatchResult(
-            start_x=self.start_x + offset_x,
-            start_y=self.start_y + offset_y,
-            end_x=self.end_x + offset_x,
-            end_y=self.end_y + offset_y,
-            shape=self.shape,
-            confidence=self.confidence,
-            scale=self.scale
-        )
+    # def transform(self,offset_x: int, offset_y: int) -> 'MatchResult':
+    #     """Transform the match result by applying an offset."""
+    #     return MatchResult(
+    #         start_x=self.start_x + offset_x,
+    #         start_y=self.start_y + offset_y,
+    #         end_x=self.end_x + offset_x,
+    #         end_y=self.end_y + offset_y,
+    #         shape=self.shape,
+    #         confidence=self.confidence,
+    #         scale=self.scale
+    #     )
     
-    def scale_px(self, pixels:int):
-        """make the matchresult larger or smaller by a number of pixels"""
-        self.start_x -= pixels
-        self.start_y -= pixels
-        self.end_x += pixels
-        self.end_y += pixels
+    # def scale_px(self, pixels:int):
+    #     """make the matchresult larger or smaller by a number of pixels"""
+    #     self.start_x -= pixels
+    #     self.start_y -= pixels
+    #     self.end_x += pixels
+    #     self.end_y += pixels
 
-    def crop_in(self, image: Image.Image) -> Image.Image:
-        """Crop the match result from the image."""
-        return image.crop((self.start_x, self.start_y, self.end_x, self.end_y))
+    # def crop_in(self, image: Image.Image) -> Image.Image:
+    #     """Crop the match result from the image."""
+    #     return image.crop((self.start_x, self.start_y, self.end_x, self.end_y))
         
 
 
@@ -250,79 +251,100 @@ def draw_circle_on_image(image: Image, match: MatchResult, padding_x=0, padding_
 
     return image
 
-if __name__ == "__main__":
-    # Example usage
-    screenshot_path = "runelite_screenshot.png"
-    subimage_path = "data/ui/quick-prayer-disabled.png"
-    output_path = "output.png"
+# ── helper to order cv2.boxPoints result TL‑TR‑BR‑BL ───────────────────
+def _order_box(pts: np.ndarray) -> list[tuple[int, int]]:
+    # sort by y (row) then x (col)
+    pts = pts[np.lexsort((pts[:, 0], pts[:, 1]))]      # top 2 then bottom 2
+    tl, tr = sorted(pts[:2], key=lambda p: p[0])       # left‑most is TL
+    bl, br = sorted(pts[2:], key=lambda p: p[0])       # left‑most is BL
+    return [tuple(tl), tuple(tr), tuple(br), tuple(bl)]
 
-    match = find_subimage(screenshot_path, subimage_path)
-    print(f"Match found at: ({match.start_x}, {match.start_y}) -> ({match.end_x}, {match.end_y}) with confidence: {match.confidence}")
-
-    output_image = draw_box_on_image(screenshot_path, match, padding_x=0, padding_y=0, box_color="red")
-    
-    output_image.show()
-
+# ───────────────────────────────────────────────────────────────────────
 def find_color_box(
     pil_img: Image.Image,
     target_rgb: Tuple[int, int, int],
-    tol: int = 0,
-) -> MatchResult:
+    tol: int = 40,
+) -> ShapeResult:
     """
-    Locate the largest rectangular outline drawn in `target_rgb`.
-    Returns the bounding box strictly INSIDE the coloured outline.
+    Locate the largest rectangular outline drawn in `target_rgb` (± `tol`)
+    and return a ShapeResult whose four vertices sit *inside* that border.
+    Works for both axis‑aligned and rotated rectangles.
     """
-    # ─── 1.  Make a boolean mask of pixels that match the colour ────────────────
-    img = pil_img.convert("RGB")
-    arr = np.asarray(img)
-    if tol == 0:
-        mask = np.all(arr == target_rgb, axis=2)
-    else:
-        diff = np.abs(arr - np.array(target_rgb))
-        mask = np.all(diff <= tol, axis=2)
+    # 1. colour mask ────────────────────────────────────────────────────
+    arr = np.asarray(pil_img.convert("RGB"))
+    diff = np.abs(arr - np.array(target_rgb))
+    mask = np.all(diff <= tol, axis=2) if tol else np.all(arr == target_rgb, axis=2)
 
-    # ─── 2.  Connected-component labelling to split separate blobs ─────────────
-    mask_u8 = mask.astype(np.uint8)
-    num, labels = cv2.connectedComponents(mask_u8, connectivity=4)
-
+    # 2. connected components – grab largest blob ──────────────────────
+    num, labels = cv2.connectedComponents(mask.astype(np.uint8), connectivity=4)
     if num <= 1:
         raise ValueError("No pixels found with the specified colour.")
 
-    # ─── 3.  Pick the blob with the most pixels (assume that is the box) ───────
-    best_label = None
-    best_area = -1
-    coords_best = None
-
+    best_area, coords_best = -1, None
     for lbl in range(1, num):
         coords = np.column_stack(np.where(labels == lbl))
-        area = coords.shape[0]
-        if area > best_area:
-            best_area = area
-            best_label = lbl
-            coords_best = coords
+        if coords.shape[0] > best_area:
+            best_area, coords_best = coords.shape[0], coords
 
-    if coords_best is None:
-        raise ValueError("Could not find a coloured region.")
-
-    # coords are (row, col)
-    rows = coords_best[:, 0]
-    cols = coords_best[:, 1]
+    rows, cols = coords_best[:, 0], coords_best[:, 1]
     top, bottom = rows.min(), rows.max()
     left, right = cols.min(), cols.max()
+    h, w = bottom - top, right - left
 
-    # shrink inside border (1 px) to guarantee we are within the outline
-    if right - left > 2 and bottom - top > 2:  # avoid negative size
-        left_in, right_in = left + 1, right - 1
-        top_in, bottom_in = top + 1, bottom - 1
-    else:  # fallback, use original
-        left_in, right_in, top_in, bottom_in = left, right, top, bottom
+    # 3. decide: on‑axis or rotated? ────────────────────────────────────
+    # a narrow blob (thickness 1‑3 px) with very thin diagonals means axis‑aligned
+    # 3. decide: on‑axis or rotated? ────────────────────────────────────
+    if h == 0 or w == 0:
+        raise ValueError("Degenerate box.")
 
-    # confidence = coloured pixels inside / expected outline pixels
-    expected_perimeter = 2 * ((right - left) + (bottom - top))
-    confidence = best_area / max(expected_perimeter, 1)
+    axis_ratio = min(h, w) / max(h, w)
+    if axis_ratio < 0.05:
+        axis_ratio = 0
 
-    return MatchResult(left_in, top_in, right_in, bottom_in, confidence)
+    # replace this line ↓
+    # filled = cv2.countNonZero(mask[top:bottom+1, left:right+1])
+    filled = np.count_nonzero(mask[top:bottom + 1, left:right + 1])
 
+    # is_axis_aligned = (
+    #     axis_ratio < 0.2 or            # very thin outline
+    #     filled >= 0.9 * best_area
+    # )
+
+    # if is_axis_aligned:
+    #     # 4A. simple axis‑aligned path (unchanged except defaults) ───────
+    #     left_in, right_in = (left + 1, right - 1) if w > 2 else (left, right)
+    #     top_in, bottom_in = (top + 1, bottom - 1) if h > 2 else (top, bottom)
+    #     pts = [
+    #         (left_in,  top_in),
+    #         (right_in, top_in),
+    #         (right_in, bottom_in),
+    #         (left_in,  bottom_in),
+    #     ]
+    #     expected_perim = 2 * (w + h)
+    #     confidence = best_area / max(expected_perim, 1)
+    #     return ShapeResult(points=pts, confidence=confidence)
+
+    # 4B. rotated rectangle path ────────────────────────────────────────
+    # OpenCV wants (x, y) not (row, col)
+    pts_xy = np.flip(coords_best, axis=1).astype(np.float32)
+    rect = cv2.minAreaRect(pts_xy)               # (cx,cy), (w,h), angle
+    box = cv2.boxPoints(rect)                    # 4×2 float
+    box = np.int32(box)
+
+    # nudge each vertex 1 px toward the centre so it sits *inside* outline
+    centre = np.mean(box, axis=0)
+    vecs = centre - box
+    norms = np.linalg.norm(vecs, axis=1, keepdims=True)
+    norms[norms == 0] = 1                        # avoid div‑by‑0
+    box_in = (box + (vecs / norms)).astype(int)  # pull 1 px inward
+    ordered = _order_box(box_in)
+
+    # confidence ≈ blob area ÷ box perimeter (works for rotated too)
+    w_rot, h_rot = rect[1]
+    expected_perim = 2 * (w_rot + h_rot)
+    confidence = best_area / max(expected_perim, 1)
+
+    return ShapeResult(points=ordered, confidence=confidence)
 
 
 from functools import wraps
