@@ -44,10 +44,11 @@ def main():
 
         if random.random() < CHANCE_CHANGE_POINT:
             overlap_point = overlap_match.get_point_within()
-            print(f'changed click point: {overlap_point}')
+            print(f'Changed click point: {overlap_point}')
         
-        if not (i+1) % 10:
-            print(f'Remaining items: {alch_count-(i+1)}')
+        alched = alch_count-(i+1)
+        if not alched % 10:
+            print(f'Remaining items: {alched}')
         
         if random.random() < CHANCE_REST:
             rest_sec = random.randint(*REST_RANGE)
