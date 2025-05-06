@@ -5,3 +5,4 @@ mss
 opencv-python
 pytesseract
 keyboard
+requests
