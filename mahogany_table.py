@@ -24,7 +24,7 @@ def main():
         client.click_item(
             PLANKS,
             crop=(0,13,0,0), # crop top off planks (count)
-            min_confidence=.91
+            min_confidence=.89
         )
 
         unnote_planks()
