@@ -138,6 +138,7 @@ def propose_sleep():
     if random.random() < SLEEP_CHANCE:
         t = random.randint(*SLEEP_RANGE)
         print(f'sleeping for {tools.seconds_to_hms(t)}')
+        client.move_off_window()
         time.sleep(t)
 
 def sleep(base_time):
