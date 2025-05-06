@@ -21,12 +21,6 @@ def main():
 
     while not terminate:
 
-        client.click_item(
-            PLANKS,
-            crop=(0,13,0,0), # crop top off planks (count)
-            min_confidence=.89
-        )
-
         unnote_planks()
 
         client.smart_click_tile(
@@ -72,6 +66,11 @@ def main():
 def unnote_planks():
     done = False
     for _ in range(3):
+        client.click_item(
+            PLANKS,
+            crop=(0,13,0,0), # crop top off planks (count)
+            min_confidence=.89
+        )
         client.smart_click_tile(
             PHIALS_TILE,
             'Phials'
