@@ -14,30 +14,30 @@ PHIALS_TILE = (0,255,255)
 PORTAL_TILE = (255,55,255)
 TABLE_TILE = (255,55,100)
 MAHOGANY_TABLE = Image.open('data/ui/mahogany-table-build.png')
-SLEEP_CHANCE = .008
+SLEEP_CHANCE = .03 #actually higher b/c this is referenced multiple times
 SLEEP_RANGE = (25,122)
 terminate = False
 
 def main():
     start_time = time.time()
-    items = init(PLANKS_NOTE)
-
-    # sometimes it fails to unnote planks
-    # calling it a feature, not bug
-    missed_planks_cnt = 0
+    init()
 
     while not terminate:
-        unnote_planks()
+        if not planks_in_inventory():
+            unnote_planks()
 
         client.smart_click_tile(
             PORTAL_TILE,
             'Build'
         )
+        propose_break()
 
         sleep(5)
 
         for _ in range(4):
-            propose_sleep()
+            if not planks_in_inventory():
+                break
+            propose_break()
             if terminate: break
             sleep(1)
             try:
@@ -64,6 +64,7 @@ def main():
                 print('couldnt find build button, lets assume it got pressed')
 
             time.sleep(1)
+            match = None
             for _ in range(3):
                 if terminate: break
                 try:
@@ -73,14 +74,13 @@ def main():
                     )
                     break
                 except Exception as e:
-                    print(e)
                     print('missed mahogany table build btn')
 
-            
-            client.click(match)
+            if match:
+                client.click(match)
             sleep(.4)
             
-        propose_sleep()
+        propose_break()
         sleep(2)
         client.smart_click_tile(
             PORTAL_TILE,
@@ -93,9 +93,14 @@ def main():
 
 
 
-def unnote_planks():
+def unnote_planks(recurse=0):
+    if recurse >= 3:
+        raise ValueError('WTF Phails??')
     done = False
     for _ in range(3):
+        # seems overkill but im getting weird behavior
+        if planks_in_inventory():
+            return
         if terminate: break
         client.click_item(
             PLANKS_NOTE,
@@ -115,12 +120,18 @@ def unnote_planks():
             )
             done = True
             break
-        except: print('Phials is an elusive boi')
+        except Exception as e: 
+            print(e)
+            print('Phials is an elusive boi')
     if not done:
         raise RuntimeError('Phials evaded us :(')
+    time.sleep(1)
+    if not planks_in_inventory():
+        print('Apparently i didnt get planks :(')
+        unnote_planks(recurse+1)
 
 
-def chat_text_clicker(text,wait_msg,wait=1,tries=5):
+def chat_text_clicker(text,wait_msg,wait=.5,tries=8):
     done = False
     for _ in range(tries):
         if terminate: break
@@ -129,12 +140,13 @@ def chat_text_clicker(text,wait_msg,wait=1,tries=5):
             client.click_chat_text(text)
             done = True
             break
-        except:
+        except Exception as e:
+            print(e)
             print(wait_msg)
     if not done:
         raise RuntimeError(f'Could not find chat text {text}')
 
-def propose_sleep():
+def propose_break():
     if random.random() < SLEEP_CHANCE:
         t = random.randint(*SLEEP_RANGE)
         print(f'sleeping for {tools.seconds_to_hms(t)}')
@@ -145,14 +157,17 @@ def sleep(base_time):
     mult = random.uniform(1.0,1.3)
     time.sleep(base_time*mult)
     
+def planks_in_inventory() -> bool:
+    try:
+        client.find_item(PLANKS,min_confidence=.95)
+        return True
+    except:
+        return False
 
+def init():
 
-def init(identifier):
-
-    item_count = client.get_item_cnt(identifier, min_confidence=.9)
+    print(f'initializing bot {__file__}')
     threading.Thread(target=listen_for_escape, daemon=True).start()
-
-    return item_count
 
 
 def listen_for_escape():
@@ -164,6 +179,5 @@ def listen_for_escape():
             terminate = True
             return
         time.sleep(0.1)
-
 
 main()
