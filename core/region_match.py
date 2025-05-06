@@ -75,7 +75,7 @@ class RegionMixin(ABC):
     @abstractmethod
     def _shallow_copy(self, **kw): ...
 
-    def transform(self, dx: int, dy: int):
+    def transform(self, dx: int, dy: int) -> MatchResult:
         return self._shallow_copy(offset=(dx, dy))
 
     def scale_px(self, pixels: int):

@@ -21,11 +21,11 @@ def _preprocess(pil_img: Image.Image) -> Image.Image:
     img = cv2.resize(img, None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC)
 
     # 4) grayscale + adaptive threshold
-    #gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     # thr  = cv2.adaptiveThreshold(gray, 255,
     #     cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
     #     cv2.THRESH_BINARY, 31, 8)
-    return Image.fromarray(img)
+    return Image.fromarray(gray)
 
 
 
@@ -35,7 +35,8 @@ def execute(
         oem: TessOem = TessOem.DEFAULT,
         psm: TessPsm = TessPsm.SINGLE_LINE,
         preprocess: bool = True,
-        characters: str = None
+        characters: str = None,
+        raise_on_blank = True
     ) -> str:
     """
     Run Tesseract on `img` and return the text it found.
@@ -57,9 +58,10 @@ def execute(
 
 
     ans = pytesseract.image_to_string(img, lang=lang, config=config).strip()
-    if not ans:
+    if not ans and raise_on_blank:
         print(f"lang: {lang}, config: {config}")
         img.show()
+        raise ValueError('OCR yielded no characters')
     return ans
 
 

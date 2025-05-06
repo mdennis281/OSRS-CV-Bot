@@ -4,9 +4,9 @@ import mss
 import time
 from PIL import Image
 import io
-from core.tools import find_subimage, MatchResult, MatchShape, timeit, write_text_to_image
+from core.tools import find_subimage, MatchResult, MatchShape, timeit, write_text_to_image, find_color_box
 from core.input.mouse_control import click_in_match, move_to, ClickType, click
-from core.ocr import FontChoice, OcrError, find_string_bounds
+from core import ocr
 from typing import Tuple, List
 import threading
 import cv2
@@ -191,21 +191,42 @@ class GenericWindow:
             img_with_box = match.debug_draw(screenshot, color=color)
             img_with_box.show()
 
+    def find_img_in_window(self, img: Image.Image, sub_match: MatchResult = None):
+        sc = self.get_screenshot()
+        if sub_match:
+            sc = sub_match.crop_in(sc)
+        match: MatchResult = find_subimage(sc,img,min_scale=1,max_scale=1)
+
+        if sub_match:
+            match.transform(sub_match.start_x,sub_match.start_y)
+        
+        return match
+        
+
+    
+
+    def move_to(self,match: MatchResult | Tuple[int]):
+        if isinstance(match, MatchResult):
+            x,y = match.get_point_within()
+        else:
+            x,y = match
+            x,y = match
+        # todo: sector support???
+        x += self.window.left
+        y += self.window.top
+            
+        move_to(x,y)
+
+
     def click(
             self, match: MatchResult | Tuple[int], 
             click_cnt:int=1, min_click_interval: float = 0.3, 
             click_type=ClickType.LEFT, parent_sectors: List[MatchResult]=[]):
         """Clicks on the center of the matched area."""
-        
-
 
         # subimage in subimage, revert back to sc match
 
         self.bring_to_focus()
-
-        
-        
-        
 
         if isinstance(match, tuple):
             x,y = match
@@ -271,7 +292,7 @@ class RuneLiteClient(GenericWindow):
         match = getattr(self.minimap, element.value)
         try:
             stat = self.minimap.get_minimap_stat(match, self.screenshot)
-        except OcrError as e:
+        except ocr.OcrError as e:
             sc = self.get_screenshot()
             sc = self.debug_minimap(sc)
 
@@ -310,6 +331,7 @@ class RuneLiteClient(GenericWindow):
                 icon.width-crop[2],
                 icon.height-crop[3]
             ))
+            #icon.show()
 
 
         if not isinstance(item, Item):
@@ -350,7 +372,7 @@ class RuneLiteClient(GenericWindow):
         try:
             return match.extract_number(
                 self.screenshot,
-                FontChoice.RUNESCAPE_SMALL
+                ocr.FontChoice.RUNESCAPE_SMALL
             )
             
         except Exception as e: 
@@ -369,13 +391,15 @@ class RuneLiteClient(GenericWindow):
             tab: ToolplaneTab = ToolplaneTab.INVENTORY,
             click_cnt: int = 1,
             min_confidence=0.97,
-            min_click_interval: float = 0.3
+            min_click_interval: float = 0.3,
+            crop: Tuple[int] = None
     ):
         
         match = self.find_item(
             item_identifier,
             tab,
-            min_confidence
+            min_confidence,
+            crop
         )
         
             
@@ -415,10 +439,10 @@ class RuneLiteClient(GenericWindow):
         
         menu = menu_match.crop_in(sc)
 
-        ocr_match = find_string_bounds(
+        ocr_match = ocr.find_string_bounds(
             menu,
             option,
-            lang=FontChoice.RUNESCAPE_BOLD.value
+            lang=ocr.FontChoice.RUNESCAPE_BOLD.value
         )
         match = MatchResult(
             ocr_match['x1'],
@@ -432,8 +456,6 @@ class RuneLiteClient(GenericWindow):
             menu_match.start_y
         )
         self.click(match)
-
-
 
     
     def debug_minimap(self,screenshot: Image.Image = None):
@@ -471,6 +493,74 @@ class RuneLiteClient(GenericWindow):
 
         #self.screenshot.show()
 
+    def get_hover_text(self):
+        """not gonna lie, this kinda sucks"""
+        logo = Image.open('data/ui/rl-window-logo.png')
+        match = self.find_in_window(
+            logo,min_scale=1,max_scale=1
+        )
+        match = match.transform(0,25)
+        match.end_x = match.start_x + 350
+        hover_info = match.crop_in(self.get_screenshot())
+        ans = ''
+        if hover_info:
+            ans = ocr.execute(
+                hover_info,
+                font=ocr.FontChoice.RUNESCAPE_BOLD,
+                psm=ocr.TessPsm.SINGLE_LINE,
+                raise_on_blank=False
+            )
+        return ans
+    
+    def smart_click_tile(
+            self,
+            tile_color, # (255,0,50)
+            hover_text, # 'furnace'
+            retry_hover=3,
+            retry_match=2
+        ):
+        for mult in range(retry_match):
+            sc = self.get_screenshot()
+            match = find_color_box(
+                sc,tile_color,
+                tol=40+(10*mult)
+            )
+            try:
+                self.smart_click_match(
+                    match,
+                    hover_text,
+                    retry_hover
+                )
+                return
+            except Exception as e:
+                if (mult+1) == retry_match:
+                    raise e
+            
+    def smart_click_match(
+            self,
+            match: MatchResult,
+            hover_text:str, # 'furnace'
+            retry_hover=3,
+            click_cnt=1,
+            click_type=ClickType.LEFT
+        ):
+        for _ in range(retry_hover):
+            point = match.get_point_within()
+            self.move_to(point)
+
+            ans = self.get_hover_text()
+            
+            if hover_text.lower() in ans.lower():
+                self.click(
+                    point,
+                    click_type=click_type,
+                    click_cnt=click_cnt
+                )
+                return
+        raise RuntimeError(f'[SmartClick] cant find match {hover_text}')
+
+
+
     
     def on_resize(self):
         print("resized!")
@@ -500,6 +590,28 @@ class RuneLiteClient(GenericWindow):
     def get_screenshot(self, maximize=True) -> Image.Image:
         self._last_screenshot = super().get_screenshot(maximize)
         return self._last_screenshot
+    
+    def click_chat_text(self,text):
+        chat = self.sectors.chat
+
+        sc = self.get_screenshot()
+        sc = chat.crop_in(sc)
+
+        
+        ocr_match = ocr.find_string_bounds(
+            sc,text,
+            lang=ocr.FontChoice.RUNESCAPE.value
+        )
+        match = MatchResult(
+            ocr_match['x1'],
+            ocr_match['y1'],
+            ocr_match['x2'],
+            ocr_match['y2'],
+            confidence=ocr_match['confidence']
+        )
+        self.click(match,parent_sectors=[chat])
+
+
         
         
 
@@ -533,6 +645,7 @@ class UISectors:
     chat: MatchResult = None
 
     def find_matches(self, sc: Image.Image, uitype: UIType):
+        # toolplane
         if uitype == UIType.MODERN:
             toolplane = Image.open('data/ui/toolplane-modern.png')
         else:
@@ -543,8 +656,24 @@ class UISectors:
             min_scale=1,max_scale=1
         )
 
-        # TODO: find chat
+        chat_bottom_right = Image.open('data/ui/chat-bottom-right.png')
+        chat_top_left = Image.open('data/ui/chat-top-left.png')
 
+        match_br = find_subimage(
+            sc, chat_bottom_right,
+            min_scale=1,max_scale=1
+        )
+        match_tl = find_subimage(
+            sc, chat_top_left,
+            min_scale=1,max_scale=1
+        )
+        self.chat = MatchResult(
+            match_tl.start_x,
+            match_tl.start_y,
+            match_br.end_x,
+            match_br.end_y,
+            confidence=(match_br.confidence + match_tl.confidence)/2
+        )
     
 
 class ToolplaneContext:
@@ -679,7 +808,7 @@ class MinimapContext:
     def get_minimap_stat(self,match: MatchResult, screenshot: Image.Image) -> int:
         """Returns the health value from the screenshot."""
         match = self.get_minimap_match(match, screenshot)
-        return match.extract_number(screenshot, FontChoice.RUNESCAPE_SMALL)
+        return match.extract_number(screenshot, ocr.FontChoice.RUNESCAPE_SMALL)
     @timeit
     def find_matches(self, screenshot: Image.Image):
         """Finds and sets the matches for health, prayer, run, and spec."""
