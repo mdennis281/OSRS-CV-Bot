@@ -226,13 +226,13 @@ class GenericWindow:
             x,y = match
             x,y = match
         # todo: sector support???
-        if translated:
+        if not translated:
             x += self.window.left
             y += self.window.top
 
         # move the mouse around a bit
         if random.random() < rand_move_chance:
-            self.move_to(self.window_match)
+            self.move_to(self.window_match,translated=True)
             
         move_to(x,y)
 
