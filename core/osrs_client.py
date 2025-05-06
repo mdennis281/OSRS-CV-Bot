@@ -208,8 +208,8 @@ class GenericWindow:
         if sub_match:
             sc = sub_match.crop_in(sc)
         match: MatchResult = find_subimage(sc,img,min_scale=1,max_scale=1)
-        if confidence < match.confidence:
-            raise ValueError(f'Match did not meet confidence threashold {match.confidence}')
+        if confidence > match.confidence:
+            raise ValueError(f'Match did not meet confidence threshold {match.confidence}')
 
         if sub_match:
             match.transform(sub_match.start_x,sub_match.start_y)
