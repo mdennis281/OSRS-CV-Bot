@@ -87,16 +87,28 @@ class GenericWindow:
     @property
     def dimensions(self):
         """Returns the (width, height) of the RuneLite window."""
-        if self.is_open:
-            return (self.window.width, self.window.height)
-        return None
+        if not self.is_open:
+            self.bring_to_focus()
+        return (self.window.width, self.window.height)
 
     @property
     def coordinates(self):
         """Returns the (x, y) position of the RuneLite window."""
-        if self.is_open:
-            return (self.window.left, self.window.top)
-        return None
+        if not self.is_open:
+            self.bring_to_focus()
+        
+        return (self.window.left, self.window.top)
+    @property
+    def window_match(self):
+        x1,y1 = self.coordinates
+        w, h  = self.dimensions
+        x2, y2 = ( x1+w, y1+h )
+        return MatchResult(
+            x1,y1,x2,y2,
+            1,1,
+            MatchShape.RECT
+        )
+
 
     def bring_to_focus(self):
         """Brings the RuneLite window to the foreground."""
@@ -215,6 +227,10 @@ class GenericWindow:
         # todo: sector support???
         x += self.window.left
         y += self.window.top
+
+        # move the mouse around a bit
+        if random.random() < rand_move_chance:
+            move_to(self.window_match)
             
         move_to(x,y)
 
@@ -547,7 +563,7 @@ class RuneLiteClient(GenericWindow):
         ):
         for _ in range(retry_hover):
             point = match.get_point_within()
-            self.move_to(point)
+            self.move_to(point,rand_move_chance=0)
 
             ans = self.get_hover_text()
             

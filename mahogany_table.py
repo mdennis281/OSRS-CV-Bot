@@ -51,11 +51,14 @@ def main():
             time.sleep(1)
 
             
-            
-            client.smart_click_tile(
-                TABLE_TILE,
-                'Build'
-            )
+            try:
+                client.smart_click_tile(
+                    TABLE_TILE,
+                    'Build'
+                )
+            except Exception as e:
+                print(e)
+                print('couldnt find build button, lets assume it got pressed')
 
             time.sleep(1)
             match = client.find_img_in_window(
