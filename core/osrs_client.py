@@ -250,22 +250,22 @@ class GenericWindow:
             # todo: sector support???
             x += self.window.left
             y += self.window.top
-            click(
-                x,y,
-                click_type=click_type,
-                click_cnt=click_cnt, 
-                min_click_interval=min_click_interval,
-            )
+            
         else:
             for sector in parent_sectors:
                 match = match.transform(sector.start_x,sector.start_y)
         
             match = match.transform(self.window.left, self.window.top)
-            click_in_match(
-                match, click_cnt=click_cnt, 
-                min_click_interval=min_click_interval,
-                click_type=click_type
-            )
+            x,y = match.get_point_within()
+
+
+        self.move_to(x,y) 
+        click(
+            x,y,
+            click_type=click_type,
+            click_cnt=click_cnt, 
+            min_click_interval=min_click_interval,
+        )
 
 
         
