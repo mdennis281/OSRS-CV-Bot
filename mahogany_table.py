@@ -1,0 +1,123 @@
+from core.osrs_client import RuneLiteClient, ToolplaneTab
+from PIL import Image
+from core import tools
+import time
+import random
+import threading
+import keyboard
+
+
+client = RuneLiteClient('')
+PLANKS = 8783 # mahogany plank (noted)
+PHIALS_TILE = (0,255,255)
+PORTAL_TILE = (255,55,255)
+TABLE_TILE = (255,55,100)
+MAHOGANY_TABLE = Image.open('data/ui/mahogany-table-build.png')
+terminate = False
+
+def main():
+    start_time = time.time()
+    items = init(PLANKS)
+
+    while not terminate:
+
+        client.click_item(
+            PLANKS,
+            crop=(0,13,0,0), # crop top off planks (count)
+            min_confidence=.91
+        )
+
+        unnote_planks()
+
+        client.smart_click_tile(
+            PORTAL_TILE,
+            'Build'
+        )
+
+        time.sleep(5)
+
+        for _ in range(4):
+            if terminate: break
+            time.sleep(1)
+            client.smart_click_tile(
+                TABLE_TILE,
+                'Remove'
+            )
+            chat_text_clicker(
+                'Yes',
+                'Waiting for table'
+            )
+            time.sleep(1)
+            client.smart_click_tile(
+                TABLE_TILE,
+                'Build'
+            )
+
+            time.sleep(1)
+            match = client.find_img_in_window(
+                MAHOGANY_TABLE
+            )
+            
+            client.click(match)
+        time.sleep(2)
+        client.smart_click_tile(
+            PORTAL_TILE,
+            'Enter'
+        )
+        time.sleep(3)
+    total_time = tools.seconds_to_hms(time.time() - start_time)
+    print(f'Grinded for {total_time}')
+    
+
+def unnote_planks():
+    done = False
+    for _ in range(3):
+        client.smart_click_tile(
+            PHIALS_TILE,
+            'Phials'
+        )
+        try:
+            chat_text_clicker(
+                'Exchange All',
+                'Waiting for Phials'
+            )
+            done = True
+            break
+        except: print('Phials is an elusive boi')
+    if not done:
+        raise RuntimeError('Phials evaded us :(')
+
+
+def chat_text_clicker(text,wait_msg,wait=1,tries=5):
+    done = False
+    for _ in range(tries):
+        try:
+            time.sleep(wait)
+            client.click_chat_text(text)
+            done = True
+            break
+        except:
+            print(wait_msg)
+    if not done:
+        raise RuntimeError(f'Could not find chat text {text}')
+
+def init(identifier):
+
+    item_count = client.get_item_cnt(identifier, min_confidence=.9)
+    threading.Thread(target=listen_for_escape, daemon=True).start()
+
+    return item_count
+
+
+def listen_for_escape():
+    """Thread function to listen for the Esc key."""
+    global terminate
+    while True:
+        if keyboard.is_pressed('esc'):
+            print("Terminating...")
+            terminate = True
+            return
+        time.sleep(0.1)
+
+
+main()
