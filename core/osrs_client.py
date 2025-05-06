@@ -238,7 +238,8 @@ class GenericWindow:
     def click(
             self, match: MatchResult | Tuple[int], 
             click_cnt:int=1, min_click_interval: float = 0.3, 
-            click_type=ClickType.LEFT, parent_sectors: List[MatchResult]=[]):
+            click_type=ClickType.LEFT, parent_sectors: List[MatchResult]=[],
+            rand_move_chance:float=.4):
         """Clicks on the center of the matched area."""
 
         # subimage in subimage, revert back to sc match
@@ -259,7 +260,7 @@ class GenericWindow:
             x,y = match.get_point_within()
 
 
-        self.move_to((x,y)) 
+        self.move_to((x,y),rand_move_chance) 
         click(
             x,y,
             click_type=click_type,
@@ -571,7 +572,8 @@ class RuneLiteClient(GenericWindow):
                 self.click(
                     point,
                     click_type=click_type,
-                    click_cnt=click_cnt
+                    click_cnt=click_cnt,
+                    rand_move_chance=0
                 )
                 return
         raise RuntimeError(f'[SmartClick] cant find match {hover_text}')
