@@ -230,7 +230,7 @@ class GenericWindow:
 
         # move the mouse around a bit
         if random.random() < rand_move_chance:
-            move_to(self.window_match)
+            self.move_to(self.window_match)
             
         move_to(x,y)
 
