@@ -259,7 +259,7 @@ class GenericWindow:
             x,y = match.get_point_within()
 
 
-        self.move_to(x,y) 
+        self.move_to((x,y)) 
         click(
             x,y,
             click_type=click_type,
