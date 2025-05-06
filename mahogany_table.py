@@ -64,12 +64,7 @@ def main():
             
             client.click(match)
             time.sleep(.4)
-            try:
-                # missing planks
-                client.find_item(PLANKS)
-            except:
-                print('Missing planks.. hmm, ok')
-                break
+            
 
         time.sleep(2)
         client.smart_click_tile(
