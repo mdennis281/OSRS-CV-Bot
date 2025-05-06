@@ -69,7 +69,7 @@ def main():
                 try:
                     match = client.find_img_in_window(
                         MAHOGANY_TABLE,
-                        confidence=.98
+                        confidence=.97
                     )
                     break
                 except Exception as e:
