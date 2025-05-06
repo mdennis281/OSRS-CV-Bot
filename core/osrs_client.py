@@ -218,15 +218,17 @@ class GenericWindow:
     
 
     def move_to(self,match: MatchResult | Tuple[int], 
-                rand_move_chance:float=0.1):
+                rand_move_chance:float=0.1,
+                translated=False):
         if isinstance(match, MatchResult):
             x,y = match.get_point_within()
         else:
             x,y = match
             x,y = match
         # todo: sector support???
-        x += self.window.left
-        y += self.window.top
+        if translated:
+            x += self.window.left
+            y += self.window.top
 
         # move the mouse around a bit
         if random.random() < rand_move_chance:
@@ -260,7 +262,7 @@ class GenericWindow:
             x,y = match.get_point_within()
 
 
-        self.move_to((x,y),rand_move_chance) 
+        self.move_to((x,y),rand_move_chance, translated=True) 
         click(
             -1,-1,
             click_type=click_type,
