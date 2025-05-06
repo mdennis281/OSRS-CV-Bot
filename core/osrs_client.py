@@ -218,7 +218,7 @@ class GenericWindow:
     
 
     def move_to(self,match: MatchResult | Tuple[int], 
-                rand_move_chance:float=0.4):
+                rand_move_chance:float=0.1):
         if isinstance(match, MatchResult):
             x,y = match.get_point_within()
         else:
@@ -262,7 +262,7 @@ class GenericWindow:
 
         self.move_to((x,y),rand_move_chance) 
         click(
-            x,y,
+            -1,-1,
             click_type=click_type,
             click_cnt=click_cnt, 
             min_click_interval=min_click_interval,
