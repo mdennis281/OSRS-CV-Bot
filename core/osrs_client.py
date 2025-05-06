@@ -203,11 +203,13 @@ class GenericWindow:
             img_with_box = match.debug_draw(screenshot, color=color)
             img_with_box.show()
 
-    def find_img_in_window(self, img: Image.Image, sub_match: MatchResult = None):
+    def find_img_in_window(self, img: Image.Image, sub_match: MatchResult = None, confidence=.95):
         sc = self.get_screenshot()
         if sub_match:
             sc = sub_match.crop_in(sc)
         match: MatchResult = find_subimage(sc,img,min_scale=1,max_scale=1)
+        if confidence < match.confidence:
+            raise ValueError('Match did not meet confidence threashold')
 
         if sub_match:
             match.transform(sub_match.start_x,sub_match.start_y)
@@ -218,7 +220,7 @@ class GenericWindow:
     
 
     def move_to(self,match: MatchResult | Tuple[int], 
-                rand_move_chance:float=0.1,
+                rand_move_chance:float=0.4,
                 translated=False):
         if isinstance(match, MatchResult):
             x,y = match.get_point_within()
