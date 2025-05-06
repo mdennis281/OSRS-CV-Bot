@@ -8,7 +8,8 @@ import keyboard
 
 
 client = RuneLiteClient('')
-PLANKS = 8783 # mahogany plank (noted)
+PLANKS = 8782
+PLANKS_NOTE = 8783 # mahogany plank (noted)
 PHIALS_TILE = (0,255,255)
 PORTAL_TILE = (255,55,255)
 TABLE_TILE = (255,55,100)
@@ -17,7 +18,7 @@ terminate = False
 
 def main():
     start_time = time.time()
-    items = init(PLANKS)
+    items = init(PLANKS_NOTE)
 
     # sometimes it fails to unnote planks
     # calling it a feature, not bug
@@ -65,7 +66,7 @@ def main():
             time.sleep(.4)
             try:
                 # missing planks
-                client.find_chat_text('right materials')
+                client.find_item(PLANKS)
             except:
                 print('Missing planks.. hmm, ok')
                 break
@@ -86,7 +87,7 @@ def unnote_planks():
     done = False
     for _ in range(3):
         client.click_item(
-            PLANKS,
+            PLANKS_NOTE,
             crop=(0,13,0,0), # crop top off planks (count)
             min_confidence=.89
         )
