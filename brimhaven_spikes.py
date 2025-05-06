@@ -5,10 +5,13 @@ import time
 import random
 import keyboard
 import threading
-#not ready :(
+
 rl_client = RuneLiteClient()
 terminate = False
 
+
+# set tiles with these colors on both
+# side of the spikes (one color for each side)
 TILE_1 = (255,118,96)
 TILE_2 = (0,0,167)
 
