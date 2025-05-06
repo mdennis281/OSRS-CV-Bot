@@ -19,6 +19,10 @@ def main():
     start_time = time.time()
     items = init(PLANKS)
 
+    # sometimes it fails to unnote planks
+    # calling it a feature, not bug
+    missed_planks_cnt = 0
+
     while not terminate:
 
         unnote_planks()
@@ -33,15 +37,20 @@ def main():
         for _ in range(4):
             if terminate: break
             time.sleep(1)
-            client.smart_click_tile(
-                TABLE_TILE,
-                'Remove'
-            )
-            chat_text_clicker(
-                'Yes',
-                'Waiting for table'
-            )
+            try:
+                client.smart_click_tile(
+                    TABLE_TILE,
+                    'Remove'
+                )
+                chat_text_clicker(
+                    'Yes',
+                    'Waiting for table'
+                )
+            except: print('table already missing? aight')
             time.sleep(1)
+
+            
+            
             client.smart_click_tile(
                 TABLE_TILE,
                 'Build'
@@ -53,6 +62,14 @@ def main():
             )
             
             client.click(match)
+            time.sleep(.4)
+            try:
+                # missing planks
+                client.find_chat_text('right materials')
+            except:
+                print('Missing planks.. hmm, ok')
+                break
+
         time.sleep(2)
         client.smart_click_tile(
             PORTAL_TILE,
@@ -62,6 +79,8 @@ def main():
     total_time = tools.seconds_to_hms(time.time() - start_time)
     print(f'Grinded for {total_time}')
     
+
+
 
 def unnote_planks():
     done = False

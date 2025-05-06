@@ -205,7 +205,8 @@ class GenericWindow:
 
     
 
-    def move_to(self,match: MatchResult | Tuple[int]):
+    def move_to(self,match: MatchResult | Tuple[int], 
+                rand_move_chance:float=0.4):
         if isinstance(match, MatchResult):
             x,y = match.get_point_within()
         else:
@@ -591,7 +592,7 @@ class RuneLiteClient(GenericWindow):
         self._last_screenshot = super().get_screenshot(maximize)
         return self._last_screenshot
     
-    def click_chat_text(self,text):
+    def find_chat_text(self,text):
         chat = self.sectors.chat
 
         sc = self.get_screenshot()
@@ -609,7 +610,11 @@ class RuneLiteClient(GenericWindow):
             ocr_match['y2'],
             confidence=ocr_match['confidence']
         )
-        self.click(match,parent_sectors=[chat])
+        return match.transform(chat.start_x,chat.start_y)
+        
+    def click_chat_text(self,text):
+        match = self.find_chat_text(text)
+        self.click(match)
 
 
         
