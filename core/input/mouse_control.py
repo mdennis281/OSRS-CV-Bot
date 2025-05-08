@@ -26,7 +26,7 @@ class ClickType(Enum):
 # ── global knobs ───────────────────────────────────────────
 user32              = ctypes.windll.user32
 terminate           = False          # Esc listener toggles this
-movement_multiplier = 0.35           # lower = faster (was 0.5)
+movement_multiplier = 0.45           # lower = faster (was 0.5)
 is_simulation = False
 
 # ── helpers ────────────────────────────────────────────────
@@ -300,8 +300,15 @@ def move_to(
 
             # ── timing baseline (cubic ease) ─────────────────────────────────
             step_distance = _euclidean(prev, wp)
-            base_dur = (step_distance / 700) * (movement_multiplier if speed is None else speed)
-            base_dur = max(.04, base_dur * random.uniform(.85, 1.15))
+
+            if speed is not None:
+                # speed = pixels per second → duration = dist / speed
+                base_dur = step_distance / speed
+            else:
+                # fallback to your human‑like defaults
+                base_dur = (step_distance / 700) * movement_multiplier
+                base_dur = max(0.03, min(base_dur, 0.5))
+                base_dur *= random.uniform(0.95, 1.05)
             # run
             _execute_step(prev,base_dur)
             prev = wp

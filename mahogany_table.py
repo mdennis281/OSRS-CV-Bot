@@ -112,7 +112,9 @@ def unnote_planks(recurse=0):
         if terminate: break
         client.smart_click_tile(
             PHIALS_TILE,
-            'Phials'
+            'Phials',
+            retry_hover=2,
+            retry_match=3
         )
         try:
             if terminate: break
