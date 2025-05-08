@@ -243,7 +243,7 @@ class GenericWindow:
             self, match: MatchResult | Tuple[int], 
             click_cnt:int=1, min_click_interval: float = 0.3, 
             click_type=ClickType.LEFT, parent_sectors: List[MatchResult]=[],
-            rand_move_chance:float=.4):
+            rand_move_chance:float=.4, after_click_settle_chance=.4):
         """Clicks on the center of the matched area."""
 
         # subimage in subimage, revert back to sc match
@@ -271,6 +271,10 @@ class GenericWindow:
             click_cnt=click_cnt, 
             min_click_interval=min_click_interval,
         )
+        if random.random() < after_click_settle_chance:
+            time.sleep(random.uniform(.2,.6))
+            self.move_to(self.window_match)
+            
 
 
         
