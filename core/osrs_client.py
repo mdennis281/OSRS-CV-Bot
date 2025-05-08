@@ -4,7 +4,7 @@ import mss
 import time
 from PIL import Image
 import io
-from core.tools import find_subimage, MatchResult, MatchShape, timeit, write_text_to_image, find_color_box
+from core.tools import find_subimage, MatchResult, MatchShape, timeit, write_text_to_image, find_color_box,seconds_to_hms
 from core.input.mouse_control import click_in_match, move_to, ClickType, click
 from core import ocr
 from typing import Tuple, List
@@ -278,6 +278,8 @@ class GenericWindow:
 
 class RuneLiteClient(GenericWindow):
     def __init__(self,username=''):
+        print('[RLClient init] Instantiating...')
+        start_time = time.time()
         super().__init__(f'RuneLite - {username}')
         self.minimap = MinimapContext()
         self.toolplane = ToolplaneContext()
@@ -285,10 +287,13 @@ class RuneLiteClient(GenericWindow):
         self.sectors: UISectors = UISectors()
 
         self.ui_type: UIType = self.get_ui_type()
-        print(f'OSRS UI Type: {self.ui_type.value}')
+        print(f'[RLClient init] UI Type: {self.ui_type.value}')
+        print(f'[RLClient init] finding sectors')
         
         self.on_resize()
         self.start_resize_watch_polling()
+        elapsed = seconds_to_hms(time.time() - start_time)
+        print(f'[RLClient init] Instantiated in {elapsed}')
         
 
     
@@ -355,19 +360,23 @@ class RuneLiteClient(GenericWindow):
             ))
             #icon.show()
 
+        
 
         if not isinstance(item, Item):
             raise ValueError(f'Item : {item_identifier} not found in database.')
         
+        item_name = item.name
+        if item.noted: item_name += ' (noted)'
+
         sc = self.sectors.toolplane.crop_in(self.screenshot)
         match = self.find_in_window(
             item.icon, sc, min_scale=1,max_scale=1
         )
 
-        print(f"{item.name} | Confidence: {round(match.confidence*100,2)}%")
+        print(f"{item_name} | Confidence: {round(match.confidence*100,2)}%")
         
         if match.confidence < min_confidence:
-            raise ValueError(f"Item {item.name} not found in window. Confidence: {match.confidence}")
+            raise ValueError(f"Item {item_name} not found in window. Confidence: {match.confidence}")
         plane = self.sectors.toolplane
         match = match.transform(plane.start_x,plane.start_y)
 

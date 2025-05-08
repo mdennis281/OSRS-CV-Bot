@@ -16,6 +16,7 @@ TABLE_TILE = (255,55,100)
 MAHOGANY_TABLE = Image.open('data/ui/mahogany-table-build.png')
 SLEEP_CHANCE = .03 #actually higher b/c this is referenced multiple times
 SLEEP_RANGE = (25,122)
+MAX_TIME_MIN = 180
 terminate = False
 
 def main():
@@ -23,6 +24,7 @@ def main():
     init()
 
     while not terminate:
+        timeout_check(start_time)
         if not planks_in_inventory():
             unnote_planks()
 
@@ -141,7 +143,6 @@ def chat_text_clicker(text,wait_msg,wait=.5,tries=8):
             done = True
             break
         except Exception as e:
-            print(e)
             print(wait_msg)
     if not done:
         raise RuntimeError(f'Could not find chat text {text}')
@@ -163,6 +164,11 @@ def planks_in_inventory() -> bool:
         return True
     except:
         return False
+    
+def timeout_check(start):
+    runtime = time.time() - start
+    if runtime/60 > MAX_TIME_MIN:
+        raise RuntimeError('MAX TIME LIMIT EXCEEDED')
 
 def init():
 
