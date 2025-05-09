@@ -42,7 +42,11 @@ def main():
             time.sleep(random.uniform(*TAB_CHECK_RANGE))
             if terminate: return
         if terminate: return
-        client.click(overlap_point, click_cnt=2)
+        client.click(
+            overlap_point, click_cnt=2, 
+            rand_move_chance=0, 
+            after_click_settle_chance=0
+        )
 
 
         if random.random() < CHANCE_CHANGE_POINT:
