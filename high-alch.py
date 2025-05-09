@@ -85,8 +85,8 @@ def get_overlap(identifier):
     return alch_match.find_overlap(item_match)
 
 def init(identifier):
-
-    natty_count = client.get_item_cnt('Nature rune',min_confidence=.9)
+    # TODO fix whatever tf is going on here
+    natty_count = 9999 #client.get_item_cnt('Nature rune',min_confidence=.9)
     item_count = client.get_item_cnt(identifier, min_confidence=.9)
     threading.Thread(target=listen_for_escape, daemon=True).start()
 
