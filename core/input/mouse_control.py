@@ -151,10 +151,14 @@ def move_to_match(match: MatchResult, **kw):
     try:  move_to(*match.get_point_within(), **kw)
     finally:  _block(False)
 
-def click_in_match(match: MatchResult, click_cnt=1, min_click_interval=.3, click_type=ClickType.LEFT):
+def click_in_match(
+        match: MatchResult, click_cnt=1, 
+        min_click_interval=.3, click_type=ClickType.LEFT
+    ):
     
     x, y = match.get_point_within()
     click(x, y, click_type, click_cnt, min_click_interval)
+
 
 
 # ────────────────────────────────────────────────────────────────
