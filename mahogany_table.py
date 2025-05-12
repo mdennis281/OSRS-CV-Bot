@@ -14,10 +14,24 @@ PHIALS_TILE = (0,255,255)
 PORTAL_TILE = (255,55,255)
 TABLE_TILE = (255,55,100)
 MAHOGANY_TABLE = Image.open('data/ui/mahogany-table-build.png')
-SLEEP_CHANCE = .03 #actually higher b/c this is referenced multiple times
+SLEEP_CHANCE = .01 #actually higher b/c this is referenced multiple times
 SLEEP_RANGE = (25,122)
 MAX_TIME_MIN = 180
 terminate = False
+
+"""
+Plugins: [ 'Better NPC Highlight', 'Tile Indicators' ]
+Setup:
+ import tiles:
+  [
+	{"regionId":7513,"regionX":3,"regionY":11,"z":0,"color":"#FFFF37FF"},
+	{"regionId":7513,"regionX":36,"regionY":60,"z":0,"color":"#FFFF3764"},
+	{"regionId":11826,"regionX":8,"regionY":24,"z":0,"color":"#FFFF37FF"}
+  ]
+  NPC highlight: 
+   NPC Highlight > Tile > Tile Names > "Phials"
+
+"""
 
 def main():
     start_time = time.time()
@@ -99,28 +113,45 @@ def unnote_planks(recurse=0):
     if recurse >= 3:
         raise ValueError('WTF Phails??')
     done = False
-    for _ in range(3):
+    for _ in range(4):
         # seems overkill but im getting weird behavior
         if planks_in_inventory():
             return
         if terminate: break
-        client.click_item(
-            PLANKS_NOTE,
-            crop=(0,13,0,0), # crop top off planks (count)
-            min_confidence=.89
-        )
+        try:
+            client.click_item(
+                PLANKS_NOTE,
+                crop=(0,13,0,0), # crop top off planks (count)
+                min_confidence=.89
+            )
+        except:
+            print('wheres the noted planks')
+            client.click_toolplane(ToolplaneTab.SKILLS)
+            client.move_off_window()
+            time.sleep(random.randint(1,6))
+            continue
         if terminate: break
-        client.smart_click_tile(
-            PHIALS_TILE,
-            'Phials',
-            retry_hover=2,
-            retry_match=3
-        )
+        try:
+            client.smart_click_tile(
+                PHIALS_TILE,
+                'Phials',
+                retry_hover=2,
+                retry_match=10
+            )
+        except:
+            print('phials match miss')
+            # unselect plank
+            client.click_toolplane(ToolplaneTab.SKILLS)
+            client.move_off_window()
+            time.sleep(random.randint(1,6))
+            
+            continue
         try:
             if terminate: break
             chat_text_clicker(
                 'Exchange All:',
-                'Waiting for Phials'
+                'Waiting for Phials',
+                tries=4
             )
             done = True
             break
