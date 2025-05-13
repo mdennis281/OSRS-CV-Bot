@@ -10,9 +10,9 @@ ITEM_TO_ALCH = 1396 # water battlestaff (noted)
 client = RuneLiteClient('')
 
 CHANCE_CHANGE_POINT = .01
-CHANCE_REST = .008
+CHANCE_REST = 0#.008
 REST_RANGE = (5,35)
-
+PAUSED = False
 # interval to check that alch is done (makes it more human)
 TAB_CHECK_RANGE = (.5,1.75)
 
@@ -47,6 +47,7 @@ def main():
             rand_move_chance=0, 
             after_click_settle_chance=0
         )
+        
 
 
         if random.random() < CHANCE_CHANGE_POINT:
@@ -63,9 +64,15 @@ def main():
             client.move_off_window()
             overlap_point = overlap_match.get_point_within()
             time.sleep(rest_sec)
+        do_pause()
     duration = tools.seconds_to_hms(time.time() - start_time)
     
     print(f'All done. Alched {alch_count} items in {duration}')
+
+
+def do_pause():
+    while PAUSED:
+        time.sleep(1)
 
 
     
@@ -86,11 +93,22 @@ def get_overlap(identifier):
 
 def init(identifier):
     # TODO fix whatever tf is going on here
-    natty_count = 9999 #client.get_item_cnt('Nature rune',min_confidence=.9)
+    natty_count = client.get_item_cnt('Nature rune',min_confidence=.9)
     item_count = client.get_item_cnt(identifier, min_confidence=.9)
+    
     threading.Thread(target=listen_for_escape, daemon=True).start()
+    threading.Thread(target=listen_for_pause, daemon=True).start()
 
     return natty_count, item_count
+
+def listen_for_pause():
+    global PAUSED
+    while True:
+        if keyboard.is_pressed('`'):
+            
+            PAUSED = not PAUSED
+            print('PAUSED' if PAUSED else 'UNPAUSED')
+        time.sleep(0.1)
 
 def listen_for_escape():
     """Thread function to listen for the Esc key."""
