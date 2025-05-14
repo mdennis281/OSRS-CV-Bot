@@ -1,2 +1,2 @@
 # auto_rs
- osrs automation using screenshot interpretation
+ osrs automation using screenshots, template matching & OCR
