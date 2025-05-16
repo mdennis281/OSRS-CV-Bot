@@ -20,7 +20,7 @@ class BankInterface:
             return False
         
     def deposit_inv():
-        pass
+        pass # IMPLEMENT DUMMY
 
 
     def get_match(self) -> tools.MatchResult:
