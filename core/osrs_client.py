@@ -4,7 +4,7 @@ import mss
 import time
 from PIL import Image
 import io
-from core.tools import find_subimage, MatchResult, MatchShape, timeit, write_text_to_image, find_color_box,seconds_to_hms
+from core.tools import find_subimage, MatchResult, MatchShape, timeit, write_text_to_image, find_color_box,seconds_to_hms, find_subimages
 from core.input.mouse_control import click_in_match, move_to, ClickType, click
 from core import ocr
 from typing import Tuple, List
@@ -189,12 +189,17 @@ class GenericWindow:
     @timeit
     def find_in_window(
             self, img: Image.Image, screenshot: Image.Image=None,
-            min_scale: float = 0.9, max_scale: float = 1.1
+            min_scale: float = 0.9, max_scale: float = 1.1,
+            min_confidence: float = 0.7
         ) -> MatchResult:
         """Finds a subimage within the RuneLite window."""
         screenshot = screenshot or self.get_screenshot()
 
-        return find_subimage(screenshot, img, min_scale=min_scale, max_scale=max_scale)
+        return find_subimage(
+            screenshot, img, 
+            min_scale=min_scale, max_scale=max_scale,
+            min_confidence=min_confidence
+        )
     
     def show_in_window(self, match: MatchResult, screenshot: Image=None, color="red"):
         """Draws a box around the found match in the screenshot."""
@@ -546,6 +551,43 @@ class RuneLiteClient(GenericWindow):
                 raise_on_blank=False
             )
         return ans
+    
+    def get_skilling_state(self, substring: str) -> bool:
+        state_box = Image.open('data/ui/skilling-state.png')
+        sc = self.get_screenshot()
+        matches = find_subimages(
+            sc,state_box,
+            min_scale=1, max_scale=1,
+            min_confidence=0.9
+            )
+        skill_match = None
+        for match in matches:
+            text = ocr.execute(
+                match.crop_in(sc),
+                font=ocr.FontChoice.RUNESCAPE,
+                psm=ocr.TessPsm.SPARSE_TEXT
+            )
+            if substring.lower() in text.lower():
+                skill_match = match
+                break
+        
+        if skill_match is None:
+            raise ValueError(f"Could not find skilling state for substring: {substring}")
+        
+        img = skill_match.crop_in(sc)
+        # find red pixel in the image
+        red_pixel = np.array(img) == [255, 0, 0]
+        green_pixel = np.array(img) == [0, 255, 0]
+        
+        # if more green than red, return True
+        if np.any(red_pixel) or np.any(green_pixel):
+            if np.sum(green_pixel) > np.sum(red_pixel):
+                return True
+            else:
+                return False
+
+        raise ValueError(f"Could not determine skilling state for substring: {substring}. No red or green pixels found in {img.size} image.")
+        
     
     def smart_click_tile(
             self,

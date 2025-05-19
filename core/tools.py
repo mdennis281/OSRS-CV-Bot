@@ -7,133 +7,22 @@ import pytesseract
 from core import ocr
 from typing import Tuple, Optional, List
 from core.region_match import MatchResult, ShapeResult, MatchShape
+from functools import wraps
 
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
-# class MatchShape(Enum):
-#     RECT = "square"
-#     ELIPSE = "circle"
-
-# @dataclass
-# class MatchResult:
-#     start_x: int
-#     start_y: int
-#     end_x: int
-#     end_y: int
-#     confidence: float = -1.0
-#     scale: float = 1.0
-#     shape: MatchShape = MatchShape.RECT
-
-#     def get_point_within(self) -> tuple[int, int]:
-#         """Uniform random pixel strictly inside the rectangle/ellipse."""
-#         # ── rectangle ────────────────────────────────────────────────
-#         if self.shape is MatchShape.RECT:
-#             return (
-#                 np.random.randint(self.start_x, self.end_x),
-#                 np.random.randint(self.start_y, self.end_y),
-#             )
-
-#         # ── ellipse ─────────────────────────────────────────────────
-#         cx, cy = (self.start_x + self.end_x) / 2, (self.start_y + self.end_y) / 2
-#         rx, ry = (self.end_x - self.start_x) / 2, (self.end_y - self.start_y) / 2
-
-#         if rx <= 0 or ry <= 0:            # degenerate → centre point
-#             return int(cx), int(cy)
-
-#         # rejection-sample integer pixels until one lands inside
-#         while True:
-#             x = np.random.randint(self.start_x, self.end_x)
-#             y = np.random.randint(self.start_y, self.end_y)
-#             dx = (x + 0.5) - cx           # +0.5 → test pixel-centre, not corner
-#             dy = (y + 0.5) - cy
-#             if (dx / rx) ** 2 + (dy / ry) ** 2 <= 1:
-#                 return x, y
-    
-#     def debug_draw(self, image: Image.Image, color="red", padding_x=0, padding_y=0) -> Image.Image:
-#         """Draw the match result on the image."""
-#         if self.shape == MatchShape.RECT:
-#             draw = ImageDraw.Draw(image)
-#             draw.rectangle([self.start_x - padding_x, self.start_y - padding_y, 
-#                             self.end_x + padding_x, self.end_y + padding_y], 
-#                            outline=color, width=2)
-#         elif self.shape == MatchShape.ELIPSE:
-#             draw = ImageDraw.Draw(image)
-#             center_x = (self.start_x + self.end_x) // 2
-#             center_y = (self.start_y + self.end_y) // 2
-#             radius_x = (self.end_x - self.start_x) // 2 + padding_x
-#             radius_y = (self.end_y - self.start_y) // 2 + padding_y
-#             draw.ellipse([center_x - radius_x, center_y - radius_y, 
-#                           center_x + radius_x, center_y + radius_y], 
-#                          outline=color, width=2)
-            
-#         return image
-    
-    # def extract_number(self, image: Image.Image, font: ocr.FontChoice = ocr.FontChoice.AUTO) -> str:
-    #     """Extract text from the match result area."""
-    #     img = image.crop((self.start_x, self.start_y, self.end_x, self.end_y))
-    #     # Use OCR or any other method to extract text from cropped_image
-    #     # For now, we will just return a placeholder string
-
-    #     rgba = np.array(img)
-
-    #     # 1. HSV masking to isolate colored text
-    #     bgr = cv2.cvtColor(rgba, cv2.COLOR_RGBA2BGR)
-    #     hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
-        
-        
-    #     lower_hsv = np.array([ 0, 250, 250], dtype=np.uint8)
-    #     upper_hsv = np.array([ 65, 255, 255], dtype=np.uint8)
-    #     hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
-    #     mask = cv2.inRange(hsv, lower_hsv, upper_hsv)
-    #     #mask = sum([cv2.inRange(hsv, lo, hi) for lo, hi in ranges])
-    #     isolated = cv2.bitwise_and(rgba, rgba, mask=mask)
-
-    #     # 2. Grayscale + Otsu threshold
-    #     gray = cv2.cvtColor(isolated, cv2.COLOR_RGBA2GRAY)
-    #     _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    #     #binary = cv2.bitwise_not(binary)
-    #     processed = Image.fromarray(binary)
-    #     ans = ocr.get_number(
-    #         processed,
-    #         font=font, #font,
-    #         preprocess=False
-    #     ) # , font)
-    #     return ans
-
-
-    # def transform(self,offset_x: int, offset_y: int) -> 'MatchResult':
-    #     """Transform the match result by applying an offset."""
-    #     return MatchResult(
-    #         start_x=self.start_x + offset_x,
-    #         start_y=self.start_y + offset_y,
-    #         end_x=self.end_x + offset_x,
-    #         end_y=self.end_y + offset_y,
-    #         shape=self.shape,
-    #         confidence=self.confidence,
-    #         scale=self.scale
-    #     )
-    
-    # def scale_px(self, pixels:int):
-    #     """make the matchresult larger or smaller by a number of pixels"""
-    #     self.start_x -= pixels
-    #     self.start_y -= pixels
-    #     self.end_x += pixels
-    #     self.end_y += pixels
-
-    # def crop_in(self, image: Image.Image) -> Image.Image:
-    #     """Crop the match result from the image."""
-    #     return image.crop((self.start_x, self.start_y, self.end_x, self.end_y))
-        
 
 
 
-def find_subimage(parent: Image.Image,
+
+def find_subimages(parent: Image.Image,
                   template: Image.Image,
                   min_scale: float = 0.5,
                   max_scale: float = 1.5,
                   scale_step: float = 0.1,
-                  method=cv2.TM_CCORR_NORMED
-                  ) -> MatchResult:
+                  method=cv2.TM_CCORR_NORMED,
+                  min_confidence: float = 0.5
+                  ) -> List[MatchResult]:
     """
     Search `parent` for the best match to `template`, ignoring transparent pixels
     and trying scales from min_scale to max_scale in increments of scale_step.
@@ -148,7 +37,7 @@ def find_subimage(parent: Image.Image,
     tpl_bgr  = cv2.cvtColor(tpl_rgba, cv2.COLOR_RGBA2BGR)
     tpl_mask = tpl_rgba[:, :, 3]  # alpha channel: 0 = transparent, 255 = opaque
 
-    best = MatchResult(0, 0, 0, 0, confidence=-1.0, scale=1.0)
+    matches: List[MatchResult] = []
     parent_h, parent_w = parent_bgr.shape[:2]
 
     # loop over scales
@@ -181,22 +70,34 @@ def find_subimage(parent: Image.Image,
                 confidence = 1.0 - min_val
                 top_left   = min_loc
                 
-            if confidence > best.confidence:
-                best = MatchResult(
+            if confidence > min_confidence:
+                matches.append(MatchResult(
                     start_x=top_left[0],
                     start_y=top_left[1],
                     end_x=top_left[0] + w,
                     end_y=top_left[1] + h,
                     confidence=confidence,
                     scale=scale
-                )
+                ))
 
         scale += scale_step
 
-    if best.confidence < 0:
-        raise ValueError("No valid match found (template never fit inside parent).")
+    if not len(matches):
+        raise ValueError(f"No matches recognized above the minimum confidence ({min_confidence})")
+    
+    matches.sort(key=lambda m: m.confidence, reverse=True)
+    return matches
 
-    return best
+
+def _first_only(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)[0]
+    return wrapper
+
+# the single‑result function
+find_subimage = _first_only(find_subimages)
+find_subimage.__doc__ = """Return *only* the best (first) match."""
 
 def write_text_to_image(image: Image, text: str, font_size: int = 20, color="black") -> Image.Image:
 
