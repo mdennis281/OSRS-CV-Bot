@@ -14,6 +14,8 @@ ORE_TILES = [(100,100,255), (100,200,100)]
 DEPOSIT_TILE = (255,0,100)
 ORE = 'coal'
 itemdb = ItemLookup()
+SLEEP_CHANCE = .03 
+SLEEP_RANGE = (25,122)
 
 DEPOSIT_INV_BTN = Image.open('data/ui/bank-deposit-inv.png')
 CLOSE_UI_ELEMENT = Image.open('data/ui/close-ui-element.png')
@@ -43,6 +45,7 @@ def main():
             time.sleep(2)
         else:
             print("Not mining, attempting to mine ore...")
+            propose_break()
             if mine_ore():
                 print("Ore mined successfully.")
                 time.sleep(4)
@@ -130,6 +133,16 @@ def is_inventory_full():
     except:
         pass
     return False
+
+def propose_break():
+    if random.random() < SLEEP_CHANCE:
+        t = random.randint(*SLEEP_RANGE)
+        print(f'sleeping for {tools.seconds_to_hms(t)}')
+        client.move_off_window()
+        for _ in range(t):
+            if terminate: raise RuntimeError('Terminated during sleep')
+            time.sleep(1)
+
 
 #mine_ore()
 #deposit_inventory()
