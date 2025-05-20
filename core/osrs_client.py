@@ -552,6 +552,13 @@ class RuneLiteClient(GenericWindow):
             )
         return ans
     
+    @property
+    def is_mining(self) -> bool:
+        try:
+            return self.get_skilling_state('mine')
+        except:
+            return False
+    
     def get_skilling_state(self, substring: str) -> bool:
         state_box = Image.open('data/ui/skilling-state.png')
         sc = self.get_screenshot()

@@ -40,7 +40,7 @@ def main():
             deposit_inventory()
             time.sleep(2)
             
-        elif client.get_skilling_state('mine'):
+        elif client.is_mining:
             print("Mining in progress...")
             time.sleep(2)
         else:
@@ -86,6 +86,10 @@ def mine_ore():
         except Exception as e:
             print(f"Error clicking tile: {e}")
             continue
+    if clicked:
+        # chance to move off window after clicking
+        if random.random() < .3:
+            client.move_off_window()
     return clicked
     
 
