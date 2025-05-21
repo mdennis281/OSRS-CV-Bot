@@ -38,7 +38,7 @@ def main():
         if is_inventory_full():
             print("Inventory is full, depositing...")
             deposit_inventory()
-            time.sleep(2)
+            
             
         elif client.is_mining:
             print("Mining in progress...")
