@@ -18,7 +18,7 @@ terminate = False
 NEXT = (0,255,100)
 STOP = (255,0,50)
 GRACE = (255,0,255)
-ACTIONS = ['jump', 'climb', 'vault', 'gap', 'tree', 'cross', 'rope','wall','-up']
+ACTIONS = ['jump', 'climb', 'vault', 'gap', 'cross', 'rope','wall','-up']
 
 # il = ItemLookup()
 # #il.get_item_by_name('Nature rune').icon.show()
