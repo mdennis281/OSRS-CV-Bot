@@ -546,7 +546,7 @@ class RuneLiteClient(GenericWindow):
         if hover_info:
             ans = ocr.execute(
                 hover_info,
-                font=ocr.FontChoice.RUNESCAPE_BOLD,
+                font=ocr.FontChoice.RUNESCAPE,
                 psm=ocr.TessPsm.SINGLE_LINE,
                 raise_on_blank=False
             )
@@ -623,26 +623,30 @@ class RuneLiteClient(GenericWindow):
     def smart_click_match(
             self,
             match: MatchResult,
-            hover_text:str, # 'furnace'
+            hover_texts:str | List[str], # 'furnace' | ['furnace','smelt']
             retry_hover=3,
             click_cnt=1,
             click_type=ClickType.LEFT
         ):
+        ans = ''
         for _ in range(retry_hover):
             point = match.get_point_within()
             self.move_to(point,rand_move_chance=0)
 
             ans = self.get_hover_text()
-            
-            if hover_text.lower() in ans.lower():
-                self.click(
-                    point,
-                    click_type=click_type,
-                    click_cnt=click_cnt,
-                    rand_move_chance=0
-                )
-                return
-        raise RuntimeError(f'[SmartClick] cant find match {hover_text}')
+            print(f"Hover text: {ans}")
+            if isinstance(hover_texts, str):
+                hover_texts = [hover_texts]
+            for hover_text in hover_texts:
+                if hover_text.lower() in ans.lower():
+                    self.click(
+                        point,
+                        click_type=click_type,
+                        click_cnt=click_cnt,
+                        rand_move_chance=0
+                    )
+                    return
+        raise RuntimeError(f'[SmartClick] cant find match {hover_texts}. Hover text: "{ans}"')
 
 
 
