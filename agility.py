@@ -4,6 +4,7 @@ from core.tools import write_text_to_image
 from core.input.mouse_control import ClickType
 from core.item_db import ItemLookup
 from core.tools import find_subimage, MatchResult, find_color_box
+from core import tools
 from core import ocr
 import threading
 import keyboard
@@ -20,6 +21,9 @@ STOP = (255,0,50)
 GRACE = (255,0,255)
 ACTIONS = ['jump', 'climb', 'vault', 'gap', 'cross', 'rope','wall','-up']
 FAIL_MAX = 10
+SLEEP_CHANCE = .01 #actually higher b/c this is referenced multiple times
+SLEEP_RANGE = (25,122)
+MAX_TIME_MIN = 180
 
 # il = ItemLookup()
 # #il.get_item_by_name('Nature rune').icon.show()
@@ -28,11 +32,14 @@ FAIL_MAX = 10
 # MOG Take
 def main():
     threading.Thread(target=listen_for_escape, daemon=True).start()
+    start = time.time()
     fails = 0
     while not terminate:
+        timeout_check(start)
         action = click_tile(NEXT, ACTIONS)
         if action:
             fails = 0
+            propose_break()
             continue
         else:
             fails += 1
@@ -78,6 +85,19 @@ def listen_for_escape():
             terminate = True
             return
         time.sleep(0.1)
+
+
+def timeout_check(start):
+    runtime = time.time() - start
+    if runtime/60 > MAX_TIME_MIN:
+        raise RuntimeError('MAX TIME LIMIT EXCEEDED')
+
+def propose_break():
+    if random.random() < SLEEP_CHANCE:
+        t = random.randint(*SLEEP_RANGE)
+        print(f'sleeping for {tools.seconds_to_hms(t)}')
+        client.move_off_window()
+        time.sleep(t)
 main()
 
 
