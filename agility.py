@@ -19,17 +19,17 @@ terminate = False
 NEXT = (0,255,100)
 STOP = (255,0,50)
 GRACE = (255,0,255)
-ACTIONS = ['jump', 'climb', 'vault', 'gap', 'cross', 'rope','wall','-up']
+ACTIONS = [
+    'jump', 'climb', 'vault', 'gap', 'cross', 
+    'rope','wall','-up', 'grab', 'leap',
+    'cross', 'monkey', '-on'
+]
 FAIL_MAX = 10
-SLEEP_CHANCE = .01 #actually higher b/c this is referenced multiple times
-SLEEP_RANGE = (25,122)
+SLEEP_CHANCE = .005
+SLEEP_RANGE = (25,60)
 MAX_TIME_MIN = 180
 
-# il = ItemLookup()
-# #il.get_item_by_name('Nature rune').icon.show()
-# il.get_item_by_id(8783).icon.show()
 
-# MOG Take
 def main():
     threading.Thread(target=listen_for_escape, daemon=True).start()
     start = time.time()
@@ -43,8 +43,7 @@ def main():
             continue
         else:
             fails += 1
-            if fails > FAIL_MAX-2:
-                # this can help if target is getting hovered
+            if fails % 2 == 0:
                 client.move_off_window()
             if fails > FAIL_MAX: 
                 print('shit is broke. PEACE')
