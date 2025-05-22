@@ -17,6 +17,7 @@ from enum import Enum
 import random
 from pathlib import Path
 import keyboard
+from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import os
@@ -422,7 +423,7 @@ class RuneLiteClient(GenericWindow):
             
         
          
-
+    
             
     @timeit
     def click_item(
@@ -595,7 +596,106 @@ class RuneLiteClient(GenericWindow):
 
         raise ValueError(f"Could not determine skilling state for substring: {substring}. No red or green pixels found in {img.size} image.")
         
+    def is_moving(self, sleep_between=.5, retry_cnt=2) -> bool:
+        """
+        Checks if the player is moving by comparing the 
+        player's position at two different times.
+        """
+        p1 = self.get_position(retry_cnt)
+        time.sleep(sleep_between)
+        p2 = self.get_position(retry_cnt)
+        return not p1.tile == p2.tile 
     
+    def get_position(self,retry_cnt=0) -> 'PlayerPosition':
+        position_container = Image.open('data/ui/player-position-state.png')
+        sc = self.get_screenshot()
+        matches = find_subimages(sc,position_container,min_scale=1,max_scale=1)
+        position_container = None
+        for match in matches:
+            text = ocr.execute(
+                match.crop_in(sc),
+                font=ocr.FontChoice.RUNESCAPE,
+                psm=ocr.TessPsm.SPARSE_TEXT,
+                raise_on_blank=False
+            )
+            for option in ['tile','chunk','region', 'id']:
+                if option in text.lower():
+                    position_container = match
+                    break
+
+            if position_container: break
+        
+        if position_container is None:
+            print(text)
+            sc.show()
+            if retry_cnt > 0:
+                time.sleep(1)
+                print(f"Retrying get_position: {retry_cnt} attempts left")
+                return self.get_position(retry_cnt=retry_cnt-1)
+            raise RuntimeError('Missing plugin: "World Location" please install & enable "Grid Location" with "Grid Info Type" == "UniqueID"')
+
+        tile = position_container.transform(40,6)
+        tile.end_x = tile.start_x + 88
+        tile.end_y = tile.start_y + 15
+        tile_val = ocr.execute(
+            tile.crop_in(sc),
+            font=ocr.FontChoice.RUNESCAPE,
+            psm=ocr.TessPsm.SINGLE_LINE,
+            characters="0123456789,",
+            raise_on_blank=False
+        )
+        if not tile_val and retry_cnt > 0:
+            time.sleep(1)
+            print(f"Retrying get_position: {retry_cnt} attempts left")
+            return self.get_position(retry_cnt=retry_cnt-1)
+        
+        tile_ans = tuple(int(t.strip()) for t in tile_val.split(',') if t.isdigit())
+
+        
+
+        chunk = position_container.transform(75,22)
+        chunk.end_x = chunk.start_x + 52
+        chunk.end_y = chunk.start_y + 15
+        chunk.crop_in(sc)
+        chunk_val = ocr.execute(
+            chunk.crop_in(sc),
+            font=ocr.FontChoice.RUNESCAPE,
+            psm=ocr.TessPsm.SINGLE_LINE,
+            characters="0123456789",
+            raise_on_blank=False
+        )
+        if not chunk_val and retry_cnt > 0:
+            time.sleep(1)
+            print(f"Retrying get_position: {retry_cnt} attempts left")
+            return self.get_position(retry_cnt=retry_cnt-1)
+        chunk_ans = int(chunk_val.strip())
+
+        region = position_container.transform(85,38)
+        region.end_x = region.start_x + 42
+        region.end_y = region.start_y + 15
+        region.crop_in(sc)
+        region_val = ocr.execute(
+            region.crop_in(sc),
+            font=ocr.FontChoice.RUNESCAPE,
+            psm=ocr.TessPsm.SINGLE_LINE,
+            characters="0123456789",
+            raise_on_blank=False
+        )
+        if not region_val and retry_cnt > 0:
+            time.sleep(1)
+            print(f"Retrying get_position: {retry_cnt} attempts left")
+            return self.get_position(retry_cnt=retry_cnt-1)
+        region_ans = int(region_val.strip())
+
+        return PlayerPosition(
+            tile=tile_ans, 
+            chunk=chunk_ans, 
+            region=region_ans
+        )
+        
+
+
+
     def smart_click_tile(
             self,
             tile_color, # (255,0,50)
@@ -639,12 +739,7 @@ class RuneLiteClient(GenericWindow):
                 hover_texts = [hover_texts]
             for hover_text in hover_texts:
                 if hover_text.lower() in ans.lower():
-                    self.click(
-                        point,
-                        click_type=click_type,
-                        click_cnt=click_cnt,
-                        rand_move_chance=0
-                    )
+                    click(-1,-1,click_type=click_type,click_cnt=click_cnt)
                     return
         raise RuntimeError(f'[SmartClick] cant find match {hover_texts}. Hover text: "{ans}"')
 
@@ -722,6 +817,13 @@ class RuneLiteClient(GenericWindow):
         if enabled_match.confidence > disabled_match.confidence:
             return True
         return False
+    
+@dataclass
+class PlayerPosition:
+    tile: Tuple[int,int,int]
+    chunk: int
+    region: int
+
     
 class UIArea(Enum):
     TOOLPLANE = 'toolplane'

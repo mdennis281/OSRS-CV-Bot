@@ -19,6 +19,7 @@ NEXT = (0,255,100)
 STOP = (255,0,50)
 GRACE = (255,0,255)
 ACTIONS = ['jump', 'climb', 'vault', 'gap', 'cross', 'rope','wall','-up']
+FAIL_MAX = 10
 
 # il = ItemLookup()
 # #il.get_item_by_name('Nature rune').icon.show()
@@ -35,7 +36,10 @@ def main():
             continue
         else:
             fails += 1
-            if fails > 10: 
+            if fails > FAIL_MAX-2:
+                # this can help if target is getting hovered
+                client.move_off_window()
+            if fails > FAIL_MAX: 
                 print('shit is broke. PEACE')
                 break
             time.sleep(1)
@@ -49,15 +53,6 @@ def click_tile(tile_color, action):
     box = None
     try: 
         box = find_color_box(client.get_screenshot(), tile_color, tol=40)
-        # really just to verify we arent moving
-        time.sleep(.8)
-        box2 = find_color_box(client.get_screenshot(), tile_color, tol=40)
-        if not box.find_overlap(box2):
-            print('WE ARE MOVING, DELAYING ACTIONS')
-            time.sleep(2)
-            return False
-
-        
     except: 
         print(f"Failed to find tile {tile_color}")
         return False
@@ -70,7 +65,8 @@ def click_tile(tile_color, action):
         
         print(f"Failed to click {action} on tile {tile_color}, {e}")
         return False
-    time.sleep(random.uniform(4,6))
+    
+    while client.is_moving(): continue
     return True
 
 def listen_for_escape():
