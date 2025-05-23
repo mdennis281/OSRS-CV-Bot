@@ -84,7 +84,7 @@ def main():
             for _ in range(3):
                 if terminate: break
                 try:
-                    match = client.find_img_in_window(
+                    match = client.find_in_window(
                         MAHOGANY_TABLE,
                         confidence=.98
                     )
