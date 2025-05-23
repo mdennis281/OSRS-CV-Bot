@@ -6,7 +6,7 @@ robust_font_trainer.py  –  synthesize heavily varied pages and fine‑tune
 Now supports running multiple font trainings in one invocation.
 """
 import subprocess, tempfile, pathlib, os, random, shutil, sys, cv2
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageOps
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -45,87 +45,78 @@ def make_box_text(charset: str, lines: int = 600) -> str:
 
 
 def tint_and_gradient(tiff_path: pathlib.Path):
-    """Hue‑jitter text, then build a richly textured background with boxes, stripes, dots, noise+blur."""
+    """Hue‑jitter text, then build a richly textured background with boxes, stripes, dots, noise+blur,
+    with a 50% chance to invert colors at the end."""
     im = Image.open(tiff_path).convert("RGBA")
     w, h = im.size
 
-    # ── 1) Hue‑jitter entire RGBA page ───────────────────────────
-    bgr = cv2.cvtColor(np.array(im), cv2.COLOR_RGBA2BGR)
-    hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
-    hsv[...,0] = ((hsv[...,0].astype(int) + random.randint(-15,15)) % 180).astype(np.uint8)
-    tinted = Image.fromarray(cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)).convert("RGBA")
-
-    # ── 2) Build text mask (text = <240 gray), then strip shadows ──
-    gray = tinted.convert("L")
-    # initial mask: any pixel darker than near-white is “text”
-    mask = gray.point(lambda px: 255 if px < 240 else 0, mode="L")
-
-    tinted.putalpha(mask)
-
-    # ── 3) Create base gradient ──────────────────────────────────
     bg = Image.new("RGBA", (w,h))
     draw = ImageDraw.Draw(bg)
-    top = tuple(random.randint(180,220) for _ in range(3)) + (255,)
-    bot = tuple(random.randint(120,160) for _ in range(3)) + (255,)
-    for y in range(h):
-        t = y / (h - 1)
-        col = tuple(int(top[i]*(1-t) + bot[i]*t) for i in range(4))
-        draw.line([(0, y), (w, y)], fill=col)
 
-    # ── 4) Add random boxes ─────────────────────────────────────
-    for _ in range(random.randint(5, 15)):
-        x0 = random.randint(0, w-1); y0 = random.randint(0, h-1)
-        x1 = x0 + random.randint(int(w*0.05), int(w*0.3))
-        y1 = y0 + random.randint(int(h*0.05), int(h*0.3))
-        color = tuple(random.randint(100,200) for _ in range(3)) + (random.randint(30,80),)
-        draw.rectangle([x0,y0,x1,y1], fill=color)
+    # half chance to not do shit
+    if random.choice([True, False]):
+        # ── 1) Hue‑jitter entire RGBA page ───────────────────────────
+        bgr = cv2.cvtColor(np.array(im), cv2.COLOR_RGBA2BGR)
+        hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
+        hsv[...,0] = ((hsv[...,0].astype(int) + random.randint(-15,15)) % 180).astype(np.uint8)
+        tinted = Image.fromarray(cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)).convert("RGBA")
 
-    # ── 5) Add random stripes ────────────────────────────────────
-    for _ in range(random.randint(3,7)):
-        if random.choice([True, False]):
-            y = random.randint(0, h-1)
-            thickness = random.randint(5, int(h*0.1))
-            color = tuple(random.randint(100,200) for _ in range(3)) + (random.randint(20,60),)
-            draw.rectangle([0, y, w, y+thickness], fill=color)
-        else:
-            x = random.randint(0, w-1)
-            thickness = random.randint(5, int(w*0.1))
-            color = tuple(random.randint(100,200) for _ in range(3)) + (random.randint(20,60),)
-            draw.rectangle([x, 0, x+thickness, h], fill=color)
+        # ── 2) Build text mask (text = <240 gray), then strip shadows ──
+        gray = tinted.convert("L")
+        mask = gray.point(lambda px: 255 if px < 240 else 0, mode="L")
+        tinted.putalpha(mask)
 
-    # ── 6) Add random dots ───────────────────────────────────────
-    for _ in range(random.randint(50,150)):
-        cx = random.randint(0, w-1); cy = random.randint(0, h-1)
-        r  = random.randint(2, int(min(w,h)*0.02))
-        color = tuple(random.randint(100,200) for _ in range(3)) + (random.randint(30,90),)
-        draw.ellipse([cx-r, cy-r, cx+r, cy+r], fill=color)
+        # ── 3) Create base gradient ──────────────────────────────────
+        
+        top = tuple(random.randint(180,220) for _ in range(3)) + (255,)
+        bot = tuple(random.randint(120,160) for _ in range(3)) + (255,)
+        for y in range(h):
+            t = y / (h - 1)
+            col = tuple(int(top[i]*(1-t) + bot[i]*t) for i in range(4))
+            draw.line([(0, y), (w, y)], fill=col)
 
-    # ── 7) Composite text over bg ──────────────────────────────
-    composite = Image.alpha_composite(bg, tinted)
+        # ── 4) Add random boxes ─────────────────────────────────────
+        for _ in range(random.randint(15, 35)):
+            x0 = random.randint(0, w-1); y0 = random.randint(0, h-1)
+            x1 = x0 + random.randint(int(w*0.05), int(w*0.3))
+            y1 = y0 + random.randint(int(h*0.05), int(h*0.3))
+            color = tuple(random.randint(10,200) for _ in range(3)) + (random.randint(30,80),)
+            draw.rectangle([x0,y0,x1,y1], fill=color)
 
-    # ── 8) Blur + noise only on background ──────────────────────
-    comp_np = np.array(composite)
-    alpha  = np.array(mask)
-    bg_np  = comp_np[..., :3].astype(np.uint8)
+        # ── 5) Add random stripes ────────────────────────────────────
+        for _ in range(random.randint(3,7)):
+            if random.choice([True, False]):
+                y = random.randint(0, h-1)
+                thickness = random.randint(5, int(h*0.1))
+                color = tuple(random.randint(10,200) for _ in range(3)) + (random.randint(20,60),)
+                draw.rectangle([0, y, w, y+thickness], fill=color)
+            else:
+                x = random.randint(0, w-1)
+                thickness = random.randint(5, int(w*0.1))
+                color = tuple(random.randint(10,200) for _ in range(3)) + (random.randint(20,60),)
+                draw.rectangle([x, 0, x+thickness, h], fill=color)
 
-    # blur background
-    blurred = cv2.GaussianBlur(bg_np, (21,21), sigmaX=7)
+        # ── 6) Add random dots ───────────────────────────────────────
+        for _ in range(random.randint(150,550)):
+            cx = random.randint(0, w-1); cy = random.randint(0, h-1)
+            r  = random.randint(2, int(min(w,h)*0.02))
+            color = tuple(random.randint(10,200) for _ in range(3)) + (random.randint(30,90),)
+            draw.ellipse([cx-r, cy-r, cx+r, cy+r], fill=color)
 
-    # noise
-    noise = np.zeros_like(blurred, dtype=np.int16)
-    cv2.randn(noise, 0, 15)
+        # ── 7) Composite text over bg ──────────────────────────────
+        composite = Image.alpha_composite(bg, tinted)
 
-    # merge: where alpha==0 use (blur+noise), else keep original
-    for c in range(3):
-        orig = bg_np[...,c].astype(np.int16)
-        mod  = blurred[...,c].astype(np.int16) + noise[...,c]
-        comp_np[...,c] = np.where(alpha==0,
-                                  np.clip(mod, 0, 255),
-                                  orig)
+    else:
+        composite = Image.alpha_composite(bg, im)
+
+    # ── 8) Convert to RGB and optionally invert colors ──────────
+    final = composite.convert("RGB")
+    if random.choice([True, False]):
+        final = ImageOps.invert(final)
 
     # ── 9) Save final RGB TIFF ───────────────────────────────────
-    final = Image.fromarray(comp_np[..., :3].astype(np.uint8))
     final.save(tiff_path, compression="tiff_lzw")
+
 
 
 def train(
@@ -153,23 +144,21 @@ def train(
     tmp_fc = pathlib.Path(tempfile.mkdtemp(prefix="fc_"))
     iterations = 10
     dpilist = [120, 150, 180, 200, 225, 250, 275, 300]
-    exposures = [-1, 0, 1]
+    ptsizes = [12, 14, 18, 24, 36]
 
     commands = []
     for i in range(iterations):
         for dpi in dpilist:
-            for exp in exposures:
-                tag = f"{lang_code}_{i}_{dpi}_{exp}"
+            for ptsize in ptsizes:
+                tag = f"{lang_code}_{i}_{dpi}_{ptsize}"
                 cmd = [
                     "text2image",
                     f"--font={font_name}",
                     f"--fonts_dir={pathlib.Path(font_file).parent}",
                     f"--outputbase={out_dir / tag}",
-                    "--ptsize", "14",
+                    "--ptsize", f"{ptsize}",
                     "--resolution", str(dpi),
-                    "--exposure", str(exp),
                     f"--fontconfig_tmpdir={tmp_fc}",
-                    "--max_pages", "60",
                     f"--text={training_text}",
                     "--degrade_image=false",
                     "--blur=false",

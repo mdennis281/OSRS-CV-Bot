@@ -1,15 +1,25 @@
 from core.osrs_client import RuneLiteClient
+from core.item_db import ItemLookup
 from core import tools
 from PIL import Image
+import keyboard
+from core.input.mouse_control import ClickType
+import time
+import random
 
 # load into memory now for faster loads
 BANK_BR = Image.open('data/ui/bank-bottom-right.png')
 BANK_TL = Image.open('data/ui/bank-top-left.png')
+BANK_DEPO_INV = Image.open('data/ui/bank-deposit-inv.png')
+BANK_SEARCH = Image.open('data/ui/bank-search.png')
+BANK_CLOSE = Image.open('data/ui/close-ui-element.png')
 
 class BankInterface:
-    def __init__(self,client:RuneLiteClient):
+    def __init__(self,client:RuneLiteClient,itemdb:ItemLookup):
+        self.itemdb = itemdb
         self.client = client
         self.bank_match: tools.MatchResult = None
+        self.last_custom_quanity = 0
 
     @property
     def is_open(self):
@@ -19,8 +29,86 @@ class BankInterface:
         except:
             return False
         
-    def deposit_inv():
-        pass # IMPLEMENT DUMMY
+    def deposit_inv(self):
+        if not self.is_open: raise ValueError('Bank is not open')
+        btn = self.client.find_in_window(
+            BANK_DEPO_INV, min_scale=1,max_scale=1
+        )
+        if btn.confidence > .9:
+            self.client.click(btn)
+
+    def search(self, item_name:str):
+        if not self.is_open: raise ValueError('Bank is not open')
+        search_box = self.client.find_in_window(
+            BANK_SEARCH, min_scale=1,max_scale=1
+        )
+        if search_box.confidence > .9:
+            time.sleep(random.uniform(1,1.3))
+            self.client.click(search_box)
+            keyboard.write(item_name,delay=.2)
+            return True
+        
+    def close(self):
+        if not self.is_open: return
+        close_btn = self.client.find_in_window(
+            BANK_CLOSE, min_scale=1,max_scale=1
+        )
+        if close_btn.confidence > .9:
+            self.client.click(close_btn)
+            return True
+        
+    
+    def smart_quantity(self, match:tools.MatchResult, amount:int, action:str):
+        if amount < 5 and amount > 0:
+            self.client.click(match, click_cnt=amount)
+        elif amount == 5:
+            self.client.click(match, click_type=ClickType.RIGHT, after_click_settle_chance=0)
+            self.client.choose_right_click_opt(f'{action}-5')
+        elif amount == 10:
+            self.client.click(match, click_type=ClickType.RIGHT, after_click_settle_chance=0)
+            self.client.choose_right_click_opt(f'{action}-10')
+        elif amount == -1:
+            self.client.click(match, click_type=ClickType.RIGHT, after_click_settle_chance=0)
+            self.client.choose_right_click_opt(f'{action}-All')
+        else:
+            self.client.click(match, click_type=ClickType.RIGHT, after_click_settle_chance=0)
+            if self.last_custom_quanity == amount:
+                self.client.choose_right_click_opt(f'{action}-{amount}')
+            else:
+                self.client.choose_right_click_opt(f'{action}-X')
+                time.sleep(random.uniform(1,1.3))
+                keyboard.write(str(amount),delay=.2)
+                keyboard.press('enter')
+                self.last_custom_quanity = amount
+
+                
+    
+    def withdraw(self, item_id:str|int, amount:int=1):
+        """
+        Withdraw an item from the bank.
+        -1 quantity = all
+        """
+
+        if isinstance(item_id, str):
+            item = self.itemdb.get_item_by_name(item_id)
+        else:
+            item = self.itemdb.get_item_by_id(item_id)
+
+        if not item: raise ValueError(f'Item {item_id} not found in itemdb')
+
+        item_ico = item.icon.crop((0,13,item.icon.width,item.icon.height))
+
+        item = self.client.find_in_window(
+            item_ico,
+            min_scale=.9,
+            max_scale=1.1,
+            min_confidence=.1,
+            sub_match=self.bank_match
+        )
+        self.smart_quantity(item, amount, 'Withdraw')
+        
+
+
 
 
     def get_match(self) -> tools.MatchResult:

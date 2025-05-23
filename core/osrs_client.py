@@ -191,16 +191,36 @@ class GenericWindow:
     def find_in_window(
             self, img: Image.Image, screenshot: Image.Image=None,
             min_scale: float = 0.9, max_scale: float = 1.1,
-            min_confidence: float = 0.7
-        ) -> MatchResult:
+            min_confidence: float = 0.7, sub_match: MatchResult = None,
+            multiple: bool = False
+        ) -> MatchResult | List[MatchResult]:
         """Finds a subimage within the RuneLite window."""
         screenshot = screenshot or self.get_screenshot()
 
-        return find_subimage(
+        if sub_match: 
+            screenshot = sub_match.crop_in(screenshot)
+
+        answers = find_subimages(
             screenshot, img, 
             min_scale=min_scale, max_scale=max_scale,
             min_confidence=min_confidence
         )
+        final = []
+        for ans in answers:
+            if sub_match:
+                ans = ans.transform(
+                    sub_match.start_x, sub_match.start_y
+                )
+            
+            if not multiple:
+                return ans
+            
+            final.append(ans)
+        
+        if not len(final):
+            raise ValueError(f"Image not found in window. MaxConfidence: {ans.confidence}")
+        
+        return final
     
     def show_in_window(self, match: MatchResult, screenshot: Image=None, color="red"):
         """Draws a box around the found match in the screenshot."""
@@ -449,27 +469,21 @@ class RuneLiteClient(GenericWindow):
             min_click_interval=min_click_interval,
         )
 
-
-
-    def choose_right_click_opt(
-            self,
-            option: str
-    ):
-        sc = self.get_screenshot()
+    def get_right_click_menu(self, sc:Image.Image=None) -> MatchResult:
+        sc = sc or self.get_screenshot()
         right_click_header = Image.open('data/ui/right-click-header.png')
         right_click_menu_end = Image.open('data/ui/right-click-menu-end.png')
-
         top_left = self.find_in_window(
             right_click_header,
             sc,
-            min_scale=.99,
-            max_scale=1.01
+            min_scale=1,
+            max_scale=1
         )
         bottom_right = self.find_in_window(
             right_click_menu_end,
             sc,
-            min_scale=.99,
-            max_scale=1.01
+            min_scale=1,
+            max_scale=1
         )
         menu_match = MatchResult(
             start_x=top_left.start_x,
@@ -477,13 +491,22 @@ class RuneLiteClient(GenericWindow):
             end_x=bottom_right.end_x,
             end_y=bottom_right.end_y,
         )
-        
+        return menu_match
+
+
+    def choose_right_click_opt(
+            self,
+            option: str
+    ):
+        sc = self.get_screenshot()
+        menu_match = self.get_right_click_menu(sc)
+
         menu = menu_match.crop_in(sc)
 
         ocr_match = ocr.find_string_bounds(
             menu,
             option,
-            lang=ocr.FontChoice.RUNESCAPE_BOLD.value
+            lang=ocr.FontChoice.RUNESCAPE.value
         )
         match = MatchResult(
             ocr_match['x1'],
@@ -492,11 +515,13 @@ class RuneLiteClient(GenericWindow):
             ocr_match['y2'],
             confidence=ocr_match['confidence']
         )
+        print(match)
         match = match.transform(
             menu_match.start_x,
             menu_match.start_y
         )
-        self.click(match)
+        self.click(match,rand_move_chance=0)
+
 
     
     def debug_minimap(self,screenshot: Image.Image = None):
@@ -534,15 +559,19 @@ class RuneLiteClient(GenericWindow):
 
         #self.screenshot.show()
 
-    def get_hover_text(self):
-        """not gonna lie, this kinda sucks"""
+    def get_hover_image(self) -> Image.Image:
         logo = Image.open('data/ui/rl-window-logo.png')
         match = self.find_in_window(
             logo,min_scale=1,max_scale=1
         )
         match = match.transform(0,25)
         match.end_x = match.start_x + 350
-        hover_info = match.crop_in(self.get_screenshot())
+        return match.crop_in(self.get_screenshot())
+
+
+    def get_hover_text(self):
+        """not gonna lie, this kinda sucks"""
+        hover_info = self.get_hover_image()
         ans = ''
         if hover_info:
             ans = ocr.execute(
@@ -557,6 +586,18 @@ class RuneLiteClient(GenericWindow):
     def is_mining(self) -> bool:
         try:
             return self.get_skilling_state('mine')
+        except:
+            return False
+    @property
+    def is_fishing(self) -> bool:
+        try:
+            return self.get_skilling_state('fish')
+        except:
+            return False
+    @property
+    def is_cooking(self) -> bool:
+        try:
+            return self.get_skilling_state('cook')
         except:
             return False
     
