@@ -36,7 +36,7 @@ def deposit_food():
     while client.is_moving(): continue
     bank.deposit_inv()
     bank.withdraw(food,-1)
-    time.sleep(random.uniform(.5,1.5))
+    client.move_off_window()
     bank.close()
 
 
