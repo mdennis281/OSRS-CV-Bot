@@ -54,7 +54,9 @@ class BankInterface:
             BANK_CLOSE, min_scale=1,max_scale=1
         )
         if close_btn.confidence > .9:
-            self.client.click(close_btn)
+            while self.is_open:
+                # potentially problematic
+                self.client.click(close_btn)
             return True
         
     
