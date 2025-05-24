@@ -16,6 +16,14 @@ client = RuneLiteClient('')
 
 terminate = False
 
+# NEED BETTER AGILITY PLUGIN
+# NEED WORLD LOCATION PLUGIN (youll get an error about it with more info)
+# (it's just the improved version)
+# change opacity to 100% in settings
+# the colors below are (Red, Green, Blue)
+
+# NOTE: zoom out camera and ensure hover text is
+# outside of the viewport thing
 NEXT = (0,255,100)
 STOP = (255,0,50)
 GRACE = (255,0,255)
