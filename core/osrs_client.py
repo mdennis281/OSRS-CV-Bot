@@ -191,36 +191,27 @@ class GenericWindow:
     def find_in_window(
             self, img: Image.Image, screenshot: Image.Image=None,
             min_scale: float = 0.9, max_scale: float = 1.1,
-            min_confidence: float = 0.7, sub_match: MatchResult = None,
-            multiple: bool = False
-        ) -> MatchResult | List[MatchResult]:
+            min_confidence: float = 0.7, sub_match: MatchResult = None
+        ) -> MatchResult:
         """Finds a subimage within the RuneLite window."""
         screenshot = screenshot or self.get_screenshot()
 
         if sub_match: 
             screenshot = sub_match.crop_in(screenshot)
 
-        answers = find_subimages(
+        ans = find_subimage(
             screenshot, img, 
             min_scale=min_scale, max_scale=max_scale,
-            min_confidence=min_confidence
         )
-        final = []
-        for ans in answers:
-            if sub_match:
-                ans = ans.transform(
-                    sub_match.start_x, sub_match.start_y
-                )
-            
-            if not multiple:
-                return ans
-            
-            final.append(ans)
+        if min_confidence > ans.confidence:
+            raise ValueError(f'Match did not meet minimum confidence {ans.confidence}')
         
-        if not len(final):
-            raise ValueError(f"Image not found in window. MaxConfidence: {ans.confidence}")
+        if sub_match:
+            ans = ans.transform(
+                sub_match.start_x, sub_match.start_y
+            )
         
-        return final
+        return ans
     
     def show_in_window(self, match: MatchResult, screenshot: Image=None, color="red"):
         """Draws a box around the found match in the screenshot."""
@@ -598,7 +589,7 @@ class RuneLiteClient(GenericWindow):
     def is_cooking(self) -> bool:
         try:
             return self.get_skilling_state('cook')
-        except:
+        except Exception as e:
             return False
     
     def get_skilling_state(self, substring: str) -> bool:
@@ -614,10 +605,12 @@ class RuneLiteClient(GenericWindow):
             text = ocr.execute(
                 match.crop_in(sc),
                 font=ocr.FontChoice.RUNESCAPE,
-                psm=ocr.TessPsm.SPARSE_TEXT
+                psm=ocr.TessPsm.SPARSE_TEXT,
+                raise_on_blank=False
             )
             if substring.lower() in text.lower():
                 skill_match = match
+                
                 break
         
         if skill_match is None:
@@ -650,7 +643,11 @@ class RuneLiteClient(GenericWindow):
     def get_position(self,retry_cnt=0) -> 'PlayerPosition':
         position_container = Image.open('data/ui/player-position-state.png')
         sc = self.get_screenshot()
-        matches = find_subimages(sc,position_container,min_scale=1,max_scale=1)
+        matches = find_subimages(
+            sc,position_container,
+            min_scale=1,max_scale=1,
+            min_confidence=.9
+        )
         position_container = None
         for match in matches:
             text = ocr.execute(
@@ -667,8 +664,6 @@ class RuneLiteClient(GenericWindow):
             if position_container: break
         
         if position_container is None:
-            print(text)
-            sc.show()
             if retry_cnt > 0:
                 time.sleep(1)
                 print(f"Retrying get_position: {retry_cnt} attempts left")
@@ -745,6 +740,7 @@ class RuneLiteClient(GenericWindow):
             retry_match=2
         ):
         for mult in range(retry_match):
+            time.sleep(3*mult) # 0 on first try
             sc = self.get_screenshot()
             match = find_color_box(
                 sc,tile_color,

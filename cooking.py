@@ -43,7 +43,9 @@ def do_cook():
     client.smart_click_tile(range_tile,'cook',retry_match=5)
     while client.is_moving(): continue
     keyboard.press('space')
-    time.sleep(5)
+    
+    time.sleep(random.uniform(3,7))
+    client.move_off_window()
     while client.is_cooking: continue
 
 

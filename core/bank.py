@@ -105,6 +105,11 @@ class BankInterface:
             min_confidence=.1,
             sub_match=self.bank_match
         )
+        self.client.click(
+            item,click_type=ClickType.RIGHT,
+            after_click_settle_chance=0
+        )
+
         self.smart_quantity(item, amount, 'Withdraw')
         
 
