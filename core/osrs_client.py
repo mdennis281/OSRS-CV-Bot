@@ -591,6 +591,20 @@ class RuneLiteClient(GenericWindow):
             return self.get_skilling_state('cook')
         except Exception as e:
             return False
+    @property
+    def makin_cannonballs(self) -> bool:
+        try: 
+             return self.get_skilling_state('ball')
+        except Exception as e:
+            print(f"Error checking cannonball state: {e}")
+            try:
+                m = self.find_item('Steel bar', min_confidence=0.95)
+                if m and m.confidence > 0.95:
+                    return True
+            except Exception as e:
+                print(f"Error checking steel bar: {e}")
+
+        return False
     
     def get_skilling_state(self, substring: str) -> bool:
         state_box = Image.open('data/ui/skilling-state.png')

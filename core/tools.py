@@ -15,14 +15,97 @@ pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tessera
 
 
 
-def find_subimages(parent: Image.Image,
+def find_subimages(
+    parent: Image.Image,
+    template: Image.Image,
+    min_scale: float = 0.5,
+    max_scale: float = 1.5,
+    scale_step: float = 0.1,
+    method=cv2.TM_CCORR_NORMED,
+    min_confidence: float = 0.5,
+    max_matches: Optional[int] = 1
+) -> List[MatchResult]:
+    """
+    Greedy multi-scale template matching with an optional cap on total matches.
+    """
+    # prepare single-channel parent
+    parent_gray = cv2.cvtColor(
+        cv2.cvtColor(
+            np.array(parent.convert("RGBA")),
+            cv2.COLOR_RGBA2BGR
+        ),
+        cv2.COLOR_BGR2GRAY
+    )
+
+    # prepare template + mask (gray + alpha)
+    tpl_rgba  = np.array(template.convert("RGBA"))
+    tpl_gray  = cv2.cvtColor(tpl_rgba[:, :, :3], cv2.COLOR_RGB2GRAY)
+    tpl_mask  = tpl_rgba[:, :, 3]
+
+    p_h, p_w = parent_gray.shape[:2]
+    matches: List[MatchResult] = []
+
+    scale = min_scale
+    while scale <= max_scale + 1e-6:
+        w = int(tpl_gray.shape[1] * scale)
+        h = int(tpl_gray.shape[0] * scale)
+        if 1 < w < p_w and 1 < h < p_h:
+            tpl_rs  = cv2.resize(tpl_gray, (w, h),
+                                 interpolation=cv2.INTER_AREA if scale < 1 else cv2.INTER_CUBIC)
+            mask_rs = cv2.resize(tpl_mask, (w, h),
+                                 interpolation=cv2.INTER_NEAREST)
+
+            # matchTemplate on gray + mask
+            result = cv2.matchTemplate(parent_gray, tpl_rs, method, mask=mask_rs)
+            result = np.nan_to_num(result, nan=-1.0, posinf=-1.0, neginf=-1.0)
+
+            # greedy extraction
+            while True:
+                min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
+                if method in (cv2.TM_CCORR_NORMED, cv2.TM_CCOEFF_NORMED):
+                    best_conf = max_val
+                    best_pt   = max_loc
+                else:
+                    best_conf = 1.0 - min_val
+                    best_pt   = min_loc
+
+                if best_conf < min_confidence:
+                    break
+
+                x, y = best_pt
+                matches.append(MatchResult(
+                    start_x   = x,
+                    start_y   = y,
+                    end_x     = x + w,
+                    end_y     = y + h,
+                    confidence= float(best_conf),
+                    scale     = scale
+                ))
+
+                # if we've hit our user‑requested cap, return early
+                if max_matches is not None and len(matches) >= max_matches:
+                    return sorted(matches, key=lambda m: m.confidence, reverse=True)
+
+                # zero out this block so we don't see it again
+                result[y:y+h, x:x+w] = -1.0
+
+        scale += scale_step
+
+    if not matches:
+        raise ValueError(f"No matches above min_confidence={min_confidence}")
+
+    # sort and return
+    matches.sort(key=lambda m: m.confidence, reverse=True)
+    return matches
+
+
+def find_subimage(parent: Image.Image,
                   template: Image.Image,
-                  min_scale: float = 0.5,
-                  max_scale: float = 1.5,
+                  min_scale: float = 1,
+                  max_scale: float = 1,
                   scale_step: float = 0.1,
-                  method=cv2.TM_CCORR_NORMED,
-                  min_confidence: float = 0.5
-                  ) -> List[MatchResult]:
+                  method=cv2.TM_CCORR_NORMED
+                  ) -> MatchResult:
     """
     Search `parent` for the best match to `template`, ignoring transparent pixels
     and trying scales from min_scale to max_scale in increments of scale_step.
@@ -37,7 +120,7 @@ def find_subimages(parent: Image.Image,
     tpl_bgr  = cv2.cvtColor(tpl_rgba, cv2.COLOR_RGBA2BGR)
     tpl_mask = tpl_rgba[:, :, 3]  # alpha channel: 0 = transparent, 255 = opaque
 
-    matches: List[MatchResult] = []
+    best = MatchResult(0, 0, 0, 0, confidence=-1.0, scale=1.0)
     parent_h, parent_w = parent_bgr.shape[:2]
 
     # loop over scales
@@ -70,34 +153,23 @@ def find_subimages(parent: Image.Image,
                 confidence = 1.0 - min_val
                 top_left   = min_loc
                 
-            if confidence > min_confidence:
-                matches.append(MatchResult(
+            if confidence > best.confidence:
+                best = MatchResult(
                     start_x=top_left[0],
                     start_y=top_left[1],
                     end_x=top_left[0] + w,
                     end_y=top_left[1] + h,
                     confidence=confidence,
                     scale=scale
-                ))
+                )
 
         scale += scale_step
 
-    if not len(matches):
-        raise ValueError(f"No matches recognized above the minimum confidence ({min_confidence})")
-    
-    matches.sort(key=lambda m: m.confidence, reverse=True)
-    return matches
+    if best.confidence < 0:
+        raise ValueError("No valid match found (template never fit inside parent).")
 
+    return best
 
-def _first_only(func):
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        return func(*args, **kwargs)[0]
-    return wrapper
-
-# the single‑result function
-find_subimage = _first_only(find_subimages)
-find_subimage.__doc__ = """Return *only* the best (first) match."""
 
 def write_text_to_image(image: Image, text: str, font_size: int = 20, color="black") -> Image.Image:
 
