@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-from PIL import Image, ImageDraw, ImageEnhance, ImageFilter
+from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageChops
 from dataclasses import dataclass
 from enum import Enum
 import pytesseract
@@ -10,93 +10,6 @@ from core.region_match import MatchResult, ShapeResult, MatchShape
 from functools import wraps
 
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
-
-
-
-
-
-def find_subimages(
-    parent: Image.Image,
-    template: Image.Image,
-    min_scale: float = 0.5,
-    max_scale: float = 1.5,
-    scale_step: float = 0.1,
-    method=cv2.TM_CCORR_NORMED,
-    min_confidence: float = 0.5,
-    max_matches: Optional[int] = 1
-) -> List[MatchResult]:
-    """
-    Greedy multi-scale template matching with an optional cap on total matches.
-    """
-    # prepare single-channel parent
-    parent_gray = cv2.cvtColor(
-        cv2.cvtColor(
-            np.array(parent.convert("RGBA")),
-            cv2.COLOR_RGBA2BGR
-        ),
-        cv2.COLOR_BGR2GRAY
-    )
-
-    # prepare template + mask (gray + alpha)
-    tpl_rgba  = np.array(template.convert("RGBA"))
-    tpl_gray  = cv2.cvtColor(tpl_rgba[:, :, :3], cv2.COLOR_RGB2GRAY)
-    tpl_mask  = tpl_rgba[:, :, 3]
-
-    p_h, p_w = parent_gray.shape[:2]
-    matches: List[MatchResult] = []
-
-    scale = min_scale
-    while scale <= max_scale + 1e-6:
-        w = int(tpl_gray.shape[1] * scale)
-        h = int(tpl_gray.shape[0] * scale)
-        if 1 < w < p_w and 1 < h < p_h:
-            tpl_rs  = cv2.resize(tpl_gray, (w, h),
-                                 interpolation=cv2.INTER_AREA if scale < 1 else cv2.INTER_CUBIC)
-            mask_rs = cv2.resize(tpl_mask, (w, h),
-                                 interpolation=cv2.INTER_NEAREST)
-
-            # matchTemplate on gray + mask
-            result = cv2.matchTemplate(parent_gray, tpl_rs, method, mask=mask_rs)
-            result = np.nan_to_num(result, nan=-1.0, posinf=-1.0, neginf=-1.0)
-
-            # greedy extraction
-            while True:
-                min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
-                if method in (cv2.TM_CCORR_NORMED, cv2.TM_CCOEFF_NORMED):
-                    best_conf = max_val
-                    best_pt   = max_loc
-                else:
-                    best_conf = 1.0 - min_val
-                    best_pt   = min_loc
-
-                if best_conf < min_confidence:
-                    break
-
-                x, y = best_pt
-                matches.append(MatchResult(
-                    start_x   = x,
-                    start_y   = y,
-                    end_x     = x + w,
-                    end_y     = y + h,
-                    confidence= float(best_conf),
-                    scale     = scale
-                ))
-
-                # if we've hit our user‑requested cap, return early
-                if max_matches is not None and len(matches) >= max_matches:
-                    return sorted(matches, key=lambda m: m.confidence, reverse=True)
-
-                # zero out this block so we don't see it again
-                result[y:y+h, x:x+w] = -1.0
-
-        scale += scale_step
-
-    if not matches:
-        raise ValueError(f"No matches above min_confidence={min_confidence}")
-
-    # sort and return
-    matches.sort(key=lambda m: m.confidence, reverse=True)
-    return matches
 
 
 def find_subimage(parent: Image.Image,
@@ -169,6 +82,79 @@ def find_subimage(parent: Image.Image,
         raise ValueError("No valid match found (template never fit inside parent).")
 
     return best
+
+def find_subimages(
+    parent: Image.Image,
+    template: Image.Image,
+    min_scale: float = 1,
+    max_scale: float = 1,
+    scale_step: float = 0.1,
+    method=cv2.TM_CCORR_NORMED,
+    min_confidence: float = 0.5,
+) -> List[MatchResult]:
+    answers = []
+    parent = parent.copy()
+    m = find_subimage(
+        parent=parent,
+        template=template,
+        min_scale=min_scale,
+        max_scale=max_scale,
+        scale_step=scale_step,
+        method=method
+    )
+    while m.confidence >= min_confidence:
+        answers.append(m)
+        # remove the found match from the parent image
+        parent = m.remove_from(parent)
+        # find the next match in the updated parent image
+        m = find_subimage(
+            parent=parent,
+            template=template,
+            min_scale=min_scale,
+            max_scale=max_scale,
+            scale_step=scale_step,
+            method=method
+        )
+    return answers
+
+
+def mask_colors(
+        image: Image.Image, 
+        colors: List[Tuple[int, int, int]], 
+        tolerance: int = 30
+    ) -> Image.Image:
+    """
+    Create a mask for the specified colors in the image.
+    The mask will be a new image where pixels matching the specified colors
+    are set to white, and all other pixels are set to black.
+    """
+    mask = Image.new("L", image.size, 0)  # Create a black mask
+
+    for color in colors:
+        # Create a color range for the mask
+        r, g, b = color
+        lower_bound = (max(0, r - tolerance), max(0, g - tolerance), max(0, b - tolerance))
+        upper_bound = (min(255, r + tolerance), min(255, g + tolerance), min(255, b + tolerance))
+
+        # Create a temporary image to find the matching pixels
+        temp_image = image.convert("RGB")
+        temp_mask = Image.new("L", image.size, 0)
+
+        for x in range(temp_image.width):
+            for y in range(temp_image.height):
+                pixel = temp_image.getpixel((x, y))
+                if (lower_bound[0] <= pixel[0] <= upper_bound[0] and
+                    lower_bound[1] <= pixel[1] <= upper_bound[1] and
+                    lower_bound[2] <= pixel[2] <= upper_bound[2]):
+                    temp_mask.putpixel((x, y), 255)
+
+        # Combine the temporary mask with the main mask for each color
+        mask = ImageChops.lighter(mask, temp_mask)
+    return mask.convert("L")  # Convert to binary mask (black and white)
+    
+
+
+
 
 
 def write_text_to_image(image: Image, text: str, font_size: int = 20, color="black") -> Image.Image:

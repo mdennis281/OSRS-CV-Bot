@@ -19,6 +19,7 @@ from pathlib import Path
 import keyboard
 from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from core import tools
 
 import os
 
@@ -360,9 +361,10 @@ class RuneLiteClient(GenericWindow):
             item_identifier: str | int,
             tab: ToolplaneTab = ToolplaneTab.INVENTORY,
             min_confidence=0.97,
+            screenshot: Image.Image = None,
             crop: Tuple[int,int,int,int] = None # left top right bottom
         ) -> MatchResult:
-        self.get_screenshot()
+        sc = screenshot or self.get_screenshot()
         self.click_toolplane(tab)
 
         if isinstance(item_identifier, str):
@@ -389,7 +391,7 @@ class RuneLiteClient(GenericWindow):
         item_name = item.name
         if item.noted: item_name += ' (noted)'
 
-        sc = self.sectors.toolplane.crop_in(self.screenshot)
+        sc = self.sectors.toolplane.crop_in(sc)
         match = self.find_in_window(
             item.icon, sc, min_scale=1,max_scale=1
         )
@@ -612,16 +614,23 @@ class RuneLiteClient(GenericWindow):
         matches = find_subimages(
             sc,state_box,
             min_scale=1, max_scale=1,
-            min_confidence=0.9
+            min_confidence=0.98
             )
         skill_match = None
         for match in matches:
-            text = ocr.execute(
+            skill_img = tools.mask_colors(
                 match.crop_in(sc),
+                [[255,255,255], # white
+                [255,0,0], # red
+                [0,255,0]] # green
+            )
+            text = ocr.execute(
+                skill_img,
                 font=ocr.FontChoice.RUNESCAPE,
                 psm=ocr.TessPsm.SPARSE_TEXT,
-                raise_on_blank=False
+                raise_on_blank=False,
             )
+
             if substring.lower() in text.lower():
                 skill_match = match
                 

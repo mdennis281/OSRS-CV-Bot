@@ -118,6 +118,15 @@ class MatchResult(RegionMixin):
         if rx <= 0 or ry <= 0:                 # degenerate
             return False
         return ((x+0.5)-cx)**2 / rx**2 + ((y+0.5)-cy)**2 / ry**2 <= 1
+    
+    def remove_from(self, img: Image.Image) -> Image.Image:
+        """Remove the region from a PIL image (fill with black)."""
+        sx, sy, ex, ey = self.bounding_box
+        if ex <= sx or ey <= sy:                # degenerate → no change
+            return img
+        draw = ImageDraw.Draw(img)
+        draw.rectangle((sx, sy, ex, ey), fill=(0, 0, 0, 0))
+        return img
 
     def outline(self, pad_x=0, pad_y=0):
         if self.shape is MatchShape.RECT:
