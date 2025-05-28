@@ -669,7 +669,7 @@ class RuneLiteClient(GenericWindow):
         matches = find_subimages(
             sc,position_container,
             min_scale=1,max_scale=1,
-            min_confidence=.9
+            min_confidence=.99
         )
         position_container = None
         for match in matches:
@@ -753,7 +753,34 @@ class RuneLiteClient(GenericWindow):
         )
         
 
-
+    def get_inv_items(self, items: List[str],min_confidence=0.97) -> List[MatchResult]:
+        self.click_toolplane(ToolplaneTab.INVENTORY)
+        sc = self.get_screenshot()
+        tp = self.sectors.toolplane
+        sc = tp.crop_in(sc)
+        matches: List[tools.MatchResult] = []
+        for item in items:
+            itm = self.item_db.get_item_by_name(item)
+            if not itm:
+                raise RuntimeError(f"Item '{item}' not found in database.")
+                
+            item_icon = itm.icon
+            if not item_icon:
+                print(f"Item icon for '{item}' not found.")
+                continue
+            matches += tools.find_subimages(
+                sc, item_icon, min_confidence=min_confidence
+            )
+        matches.sort(
+            key=lambda x: x.start_x, 
+            reverse=random.choice([True, False])
+        )
+        matches.sort(
+            key=lambda x: x.start_y, 
+            reverse=random.choice([True, False])
+        )
+        matches = [m.transform(tp.start_x,tp.start_y) for m in matches]
+        return matches
 
     def smart_click_tile(
             self,
