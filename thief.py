@@ -53,13 +53,14 @@ def steal():
     global LAST
     if terminate: return
     do_steal()
-    time.sleep(random.uniform(1.5, 2.5))
     if count_free_slots() < random.randint(1,5):
-        LAST = None
         dropped = drop_items()
         if dropped == 0:
             if count_open_slots() == 0:
                 return False
+        else:
+            LAST = None
+    time.sleep(random.uniform(1.5, 2.5))
     return True
 
 def do_steal():
@@ -112,19 +113,19 @@ def ensure_door_open():
     
 
 def drop_items(items:List[str]=DROP) -> int:
-    
-    keyboard.press('shift')
-    try:
-        matches = client.get_inv_items(items,min_confidence=.97)
-        for match in matches:
-            if terminate: return
-            client.click(
-                match, 
-                after_click_settle_chance=0,
-                rand_move_chance=0
-            )
-    finally:
-        keyboard.release('shift')
+    matches = client.get_inv_items(items,min_confidence=.97)
+    if matches:
+        try:
+            keyboard.press('shift')
+            for match in matches:
+                if terminate: return
+                client.click(
+                    match, 
+                    after_click_settle_chance=0,
+                    rand_move_chance=0
+                )
+        finally:
+            keyboard.release('shift')
     return len(matches)
 
 
