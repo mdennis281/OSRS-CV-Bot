@@ -72,7 +72,7 @@ def do_steal():
         print(f'No verb match in: "{hover}"')
     if not LAST:
         m = tools.find_color_box(client.get_screenshot(), STALL_TILE, tol=40)
-        for _ in range(5):
+        for _ in range(10):
             x,y = m.get_point_within()
             client.move_to((x,y))
             time.sleep(random.uniform(*SLEEP_BETWEEN_STEALS))
