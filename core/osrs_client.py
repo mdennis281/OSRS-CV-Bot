@@ -20,10 +20,12 @@ import keyboard
 from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from core import tools
+from core.control import ScriptControl
 
 import os
 
 MAXTHREAD = os.cpu_count()
+control = ScriptControl()
 
 
 class ToolplaneTab(Enum):
@@ -165,6 +167,7 @@ class GenericWindow:
         move_to(new_x, new_y)
 
     @timeit
+    @control.guard
     def get_screenshot(self, maximize=True) -> Image.Image:
         """Captures and returns a screenshot of the RuneLite window as a PIL image."""
         if maximize:
@@ -236,7 +239,7 @@ class GenericWindow:
         
 
     
-
+    @control.guard
     def move_to(self,match: MatchResult | Tuple[int], 
                 rand_move_chance:float=0.4,
                 translated=False):
@@ -399,6 +402,9 @@ class RuneLiteClient(GenericWindow):
         print(f"{item_name} | Confidence: {round(match.confidence*100,2)}%")
         
         if match.confidence < min_confidence:
+            match.crop_in(sc).show()
+            icon.show()
+
             raise ValueError(f"Item {item_name} not found in window. Confidence: {match.confidence}")
         plane = self.sectors.toolplane
         match = match.transform(plane.start_x,plane.start_y)
@@ -857,6 +863,26 @@ class RuneLiteClient(GenericWindow):
         classic = self.find_in_window(classic_coolplane,self.screenshot)
 
         return UIType.CLASSIC if classic.confidence > modern.confidence else UIType.MODERN
+    
+    def get_filtered_screenshot(
+            self,
+            toolplane: bool = True,
+            chat: bool = True,
+            minimap: bool = True,
+        ) -> Image.Image:
+        sc = self.get_screenshot()
+        if toolplane:
+            sc = self.sectors.toolplane.remove_from(sc)
+            for variable in vars(self.toolplane):
+                match = getattr(self.toolplane, variable)
+                if isinstance(match, MatchResult):
+                    sc = match.remove_from(sc)
+        if chat:
+            sc = self.sectors.chat.remove_from(sc)
+        if minimap:
+            # TODO: minimap sector
+            pass
+        return sc
 
     def get_screenshot(self, maximize=True) -> Image.Image:
         self._last_screenshot = super().get_screenshot(maximize)
