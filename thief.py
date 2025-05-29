@@ -36,8 +36,10 @@ def main():
 
     threading.Thread(target=listen_for_escape, daemon=True).start()
     start = time.time()
-    while not terminate:
-        while steal(): continue
+    while steal(): continue
+    print('Stealing complete.')
+    #while not terminate:
+        
     
 
 def count_open_slots() -> int:
@@ -52,15 +54,17 @@ def steal():
     """Steal from the stall."""
     global LAST
     if terminate: return
-    do_steal()
-    if count_free_slots() < random.randint(1,5):
+    time.sleep(random.uniform(1.5, 2.5))
+    if count_free_slots() == 0:
         dropped = drop_items()
         if dropped == 0:
             if count_open_slots() == 0:
                 return False
         else:
             LAST = None
-    time.sleep(random.uniform(1.5, 2.5))
+    
+    do_steal()
+    
     return True
 
 def do_steal():
