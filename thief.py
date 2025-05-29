@@ -75,19 +75,7 @@ def do_steal():
             if verb in hover.lower():
                 return True
         print(f'No verb match in: "{hover}"')
-    if not LAST:
-        m = tools.find_color_box(client.get_screenshot(), STALL_TILE, tol=40)
-        for _ in range(10):
-            x,y = m.get_point_within()
-            client.move_to((x,y))
-            time.sleep(random.uniform(*SLEEP_BETWEEN_STEALS))
-            if is_in_hover():
-                LAST = (x,y)
-                break
-            if LAST: do_steal()
-        if not LAST:
-            raise RuntimeError('Failed to find stall tile for stealing.')
-    else:
+    def do_do_steal():
         ready = False
         for _ in range(5):
             if is_in_hover():
@@ -106,6 +94,20 @@ def do_steal():
             after_click_settle_chance=0,
             rand_move_chance=0
         )
+    if not LAST:
+        m = tools.find_color_box(client.get_screenshot(), STALL_TILE, tol=40)
+        for _ in range(10):
+            x,y = m.get_point_within()
+            client.move_to((x,y))
+            time.sleep(random.uniform(*SLEEP_BETWEEN_STEALS))
+            if is_in_hover():
+                LAST = (x,y)
+                break
+            if LAST: do_steal()
+        if not LAST:
+            raise RuntimeError('Failed to find stall tile for stealing.')
+        
+    do_do_steal()
                 
 
 
