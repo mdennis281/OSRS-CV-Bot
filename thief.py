@@ -76,6 +76,7 @@ def do_steal():
                 return True
         print(f'No verb match in: "{hover}"')
     def do_do_steal():
+        global LAST
         ready = False
         for _ in range(5):
             if is_in_hover():
