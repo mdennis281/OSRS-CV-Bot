@@ -23,9 +23,12 @@ from core import tools
 from core.control import ScriptControl
 
 import os
+from PIL import ImageFilter
+from concurrent.futures import ThreadPoolExecutor
 
 MAXTHREAD = os.cpu_count()
 control = ScriptControl()
+POSITION_STATE = Image.open('data/ui/player-position-state.png')
 
 
 class ToolplaneTab(Enum):
@@ -334,6 +337,7 @@ class RuneLiteClient(GenericWindow):
 
         if self.toolplane.get_active_tab(self.screenshot) != tab.value:
             self.click(match)
+            time.sleep(random.uniform(.05, .1))
             if reload_on_tab_change: 
                 # necessary for getting active tab
                 self.get_screenshot()
@@ -367,8 +371,8 @@ class RuneLiteClient(GenericWindow):
             screenshot: Image.Image = None,
             crop: Tuple[int,int,int,int] = None # left top right bottom
         ) -> MatchResult:
-        sc = screenshot or self.get_screenshot()
         self.click_toolplane(tab)
+        sc = screenshot or self.get_screenshot()
 
         if isinstance(item_identifier, str):
             item = self.item_db.get_item_by_name(item_identifier)
@@ -670,82 +674,62 @@ class RuneLiteClient(GenericWindow):
         return not p1.tile == p2.tile 
     
     def get_position(self,retry_cnt=0) -> 'PlayerPosition':
-        position_container = Image.open('data/ui/player-position-state.png')
-        sc = self.get_screenshot()
-        matches = find_subimages(
-            sc,position_container,
-            min_scale=1,max_scale=1,
-            min_confidence=.99
-        )
-        position_container = None
-        for match in matches:
-            text = ocr.execute(
+        def do_ocr(match: MatchResult, sc: Image.Image) -> str:
+            return ocr.execute(
                 match.crop_in(sc),
                 font=ocr.FontChoice.RUNESCAPE,
-                psm=ocr.TessPsm.SPARSE_TEXT,
-                raise_on_blank=False
+                psm=ocr.TessPsm.SINGLE_LINE,
+                characters="0123456789,",
+                raise_on_blank=False,
+                preprocess=True
             )
-            for option in ['tile','chunk','region', 'id']:
-                if option in text.lower():
-                    position_container = match
-                    break
+        sc = self.get_screenshot()
+        position_container = POSITION_STATE
+        match = self.find_in_window(
+            position_container,sc,
+            min_scale=1,max_scale=1
+        )
 
-            if position_container: break
         
-        if position_container is None:
+        
+        if match.confidence < 0.99:
             if retry_cnt > 0:
                 time.sleep(1)
                 print(f"Retrying get_position: {retry_cnt} attempts left")
                 return self.get_position(retry_cnt=retry_cnt-1)
             raise RuntimeError('Missing plugin: "World Location" please install & enable "Grid Location" with "Grid Info Type" == "UniqueID"')
+    
+        
+        sc = match.crop_in(sc)
+        sc = tools.mask_colors(sc,[(255,255,255)])
+        
+        def process_ocr(match: MatchResult):
+            return do_ocr(match, sc)
 
-        tile = position_container.transform(40,6)
-        tile.end_x = tile.start_x + 88
-        tile.end_y = tile.start_y + 15
-        tile_val = ocr.execute(
-            tile.crop_in(sc),
-            font=ocr.FontChoice.RUNESCAPE,
-            psm=ocr.TessPsm.SINGLE_LINE,
-            characters="0123456789,",
-            raise_on_blank=False
-        )
+        matches = {
+            "tile": MatchResult(40, 6, 128, 21),
+            "chunk": MatchResult(75, 22, 127, 37),
+            "region": MatchResult(85, 38, 127, 53),
+        }
+
+        with ThreadPoolExecutor(max_workers=len(matches)) as executor:
+            results = {key: executor.submit(process_ocr, match) for key, match in matches.items()}
+
+        tile_val = results["tile"].result()
         if not tile_val and retry_cnt > 0:
             time.sleep(1)
             print(f"Retrying get_position: {retry_cnt} attempts left")
             return self.get_position(retry_cnt=retry_cnt-1)
-        
         tile_ans = tuple(int(t.strip()) for t in tile_val.split(',') if t.isdigit())
 
-        
-
-        chunk = position_container.transform(75,22)
-        chunk.end_x = chunk.start_x + 52
-        chunk.end_y = chunk.start_y + 15
-        chunk.crop_in(sc)
-        chunk_val = ocr.execute(
-            chunk.crop_in(sc),
-            font=ocr.FontChoice.RUNESCAPE,
-            psm=ocr.TessPsm.SINGLE_LINE,
-            characters="0123456789",
-            raise_on_blank=False
-        )
+        chunk_val = results["chunk"].result()
         if not chunk_val and retry_cnt > 0:
             time.sleep(1)
             print(f"Retrying get_position: {retry_cnt} attempts left")
             return self.get_position(retry_cnt=retry_cnt-1)
         chunk_ans = int(chunk_val.strip())
 
-        region = position_container.transform(85,38)
-        region.end_x = region.start_x + 42
-        region.end_y = region.start_y + 15
-        region.crop_in(sc)
-        region_val = ocr.execute(
-            region.crop_in(sc),
-            font=ocr.FontChoice.RUNESCAPE,
-            psm=ocr.TessPsm.SINGLE_LINE,
-            characters="0123456789",
-            raise_on_blank=False
-        )
+        region_val = results["region"].result()
         if not region_val and retry_cnt > 0:
             time.sleep(1)
             print(f"Retrying get_position: {retry_cnt} attempts left")
@@ -759,7 +743,11 @@ class RuneLiteClient(GenericWindow):
         )
         
 
-    def get_inv_items(self, items: List[str],min_confidence=0.97) -> List[MatchResult]:
+    def get_inv_items(self, 
+            items: List[str],min_confidence=0.97,
+            x_sort: bool = None,
+            y_sort: bool = None
+        ) -> List[MatchResult]:
         self.click_toolplane(ToolplaneTab.INVENTORY)
         sc = self.get_screenshot()
         tp = self.sectors.toolplane
@@ -777,13 +765,15 @@ class RuneLiteClient(GenericWindow):
             matches += tools.find_subimages(
                 sc, item_icon, min_confidence=min_confidence
             )
+        if x_sort is None: x_sort = random.choice([True, False])
+        if y_sort is None: y_sort = random.choice([True, False])
         matches.sort(
             key=lambda x: x.start_x, 
-            reverse=random.choice([True, False])
+            reverse=x_sort
         )
         matches.sort(
             key=lambda x: x.start_y, 
-            reverse=random.choice([True, False])
+            reverse=y_sort
         )
         matches = [m.transform(tp.start_x,tp.start_y) for m in matches]
         return matches
@@ -1098,13 +1088,14 @@ class ToolplaneContext:
     
 
 class MinimapContext:
+    map: MatchResult = None
     health: MatchResult = None
     prayer: MatchResult = None
     run: MatchResult = None
     spec: MatchResult = None
     MATCH_SCALE = -4 #px
 
-    def get_minimap_match(self,match: MatchResult, screenshot: Image.Image) -> MatchResult:
+    def get_minimap_value_match(self,match: MatchResult) -> MatchResult:
         """Returns the match object for the given match."""
         match = match.transform(-22+self.MATCH_SCALE, 13+self.MATCH_SCALE)
         match.end_x = match.start_x + 23
@@ -1115,7 +1106,7 @@ class MinimapContext:
 
     def get_minimap_stat(self,match: MatchResult, screenshot: Image.Image) -> int:
         """Returns the health value from the screenshot."""
-        match = self.get_minimap_match(match, screenshot)
+        match = self.get_minimap_value_match(match, screenshot)
         return match.extract_number(screenshot, ocr.FontChoice.RUNESCAPE_SMALL)
     @timeit
     def find_matches(self, screenshot: Image.Image):
@@ -1123,6 +1114,7 @@ class MinimapContext:
 
         map = find_subimage(screenshot, Image.open("data/ui/map.webp"))
         map.shape = MatchShape.ELIPSE
+        self.map = map.transform(-63, -60).scale_px(60)
         self.health = map.transform(-152, -76)
         self.prayer = map.transform(-152, -42)
         self.run = map.transform(-142, -10)

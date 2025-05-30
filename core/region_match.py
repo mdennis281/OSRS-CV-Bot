@@ -43,6 +43,13 @@ class RegionMixin(ABC):
             x, y = random.randint(sx, ex-1), random.randint(sy, ey-1)
             if self.contains(x, y):
                 return x, y
+            
+    def get_center(self) -> Tuple[int, int]:
+        """Get the center of the region (as a pixel coordinate)."""
+        sx, sy, ex, ey = self.bounding_box
+        if ex <= sx or ey <= sy:            # degenerate → top‑left
+            return sx, sy
+        return (sx + ex) // 2, (sy + ey) // 2
 
     def debug_draw(self, img: Image.Image, color="red",
                    padding_x: int = 0, padding_y: int = 0) -> Image.Image:
@@ -108,6 +115,12 @@ class MatchResult(RegionMixin):
     @property
     def bounding_box(self):                     # *already* axis aligned
         return self.start_x, self.start_y, self.end_x, self.end_y
+    @property
+    def width(self) -> int:
+        return self.end_x - self.start_x
+    @property
+    def height(self) -> int:
+        return self.end_y - self.start_y
 
     def contains(self, x: int, y: int) -> bool:
         if self.shape is MatchShape.RECT:

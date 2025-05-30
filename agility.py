@@ -58,7 +58,7 @@ def main():
                 break
             time.sleep(1)
             
-        click_tile(GRACE, 'take')
+        click_tile(GRACE, ['take','grace'])
         
 
 
@@ -75,6 +75,7 @@ def click_tile(tile_color, action):
             box, action,
             retry_hover=3
         )
+        client.move_to(client.window_match)
     except Exception as e:
         
         print(f"Failed to click {action} on tile {tile_color}, {e}")

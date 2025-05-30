@@ -1,5 +1,5 @@
 import pytesseract
-from PIL import Image
+from PIL import Image, ImageFilter
 import cv2
 import numpy as np
 import os
@@ -7,7 +7,6 @@ import sys
 import re
 from typing import List, Tuple, Optional, Dict
 from difflib import SequenceMatcher
-
 from core.ocr.enums import TessOem, TessPsm, FontChoice
 
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
@@ -19,9 +18,10 @@ def _preprocess(pil_img: Image.Image) -> Image.Image:
     img = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
     img = cv2.resize(img, None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    return Image.fromarray(gray)
+    img = Image.fromarray(gray)
+    return img.filter(ImageFilter.UnsharpMask(radius=2, percent=200))
 
-
+            
 
 def execute(
         img: Image.Image,
@@ -50,7 +50,7 @@ def execute(
     if characters is not None:
         config += f' -c tessedit_char_whitelist={characters}'
 
-
+    
     ans = pytesseract.image_to_string(img, lang=lang, config=config).strip()
     if not ans and raise_on_blank:
         print(f"lang: {lang}, config: {config}")
