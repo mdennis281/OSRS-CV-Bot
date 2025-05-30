@@ -210,20 +210,13 @@ def move_to(
         )
         waypoints.append(curvepoint)
 
-
-
-    
     # ── overshoot
-    
     if random.random() < overshoot_prob and dist0 > 40:
         ux, uy = (tx - sx) / dist0, (ty - sy) / dist0
         o_dist = dist0 * random.uniform(*overshoot_ratio)
         waypoints.append((int(tx + ux * o_dist), int(ty + uy * o_dist)))
     waypoints.append((tx, ty))                       # always the real target
     last_leg = len(waypoints) - 1                   # index of final leg
-
-    
-    
 
     _block(True)
     try:
@@ -232,27 +225,58 @@ def move_to(
             
             def _execute_step(prev, duration, min_steps=6):
                 step_start = time.time()
-                seg      = _euclidean(prev, wp)
+                seg = _euclidean(prev, wp)
                 if seg < 1: return
-                steps    = max(min_steps, int(seg / 12))
-                t_stamps = _smooth_steps(base_dur * (seg / dist0), steps)
+                
+                # More steps for smoother movement - increase minimum steps
+                # and make steps proportional to both distance and duration
+                min_steps = max(8, min_steps)
+                steps = max(min_steps, int(seg / 8))
+                
+                # Ensure we have enough steps for the given duration
+                # At least 20 steps per second for smoothness
+                min_steps_for_duration = max(min_steps, int(duration * 20))
+                steps = max(steps, min_steps_for_duration)
+                
+                # Calculate timestamps with improved easing
+                t_stamps = _smooth_steps(duration, steps)
+                
+                # Ensure minimum step time to prevent jumpy movements
+                min_step_time = 0.01  # 10ms minimum between steps
+                if not is_simulation and steps > 1:
+                    avg_step_time = duration / steps
+                    if avg_step_time < min_step_time:
+                        # Recalculate with fewer steps if moving too fast
+                        steps = max(min_steps, int(duration / min_step_time))
+                        t_stamps = _smooth_steps(duration, steps)
 
-                # distance decay uses this segment’s full length
+                # distance decay uses this segment's full length
                 seg_total = seg
 
+                # Create more natural control point for Bezier curve
+                # Avoid extreme control point values that cause sharp curves
+                ctrl_range = min(15, seg * 0.2)  # Scale control point range with distance
                 ctrl = (
-                    _lerp(prev[0], wp[0], .33) + random.randint(-15, 15),
-                    _lerp(prev[1], wp[1], .33) + random.randint(-15, 15),
+                    _lerp(prev[0], wp[0], .33) + random.uniform(-ctrl_range, ctrl_range),
+                    _lerp(prev[1], wp[1], .33) + random.uniform(-ctrl_range, ctrl_range),
                 )
+                
+                # Track the last position to detect large jumps
+                last_pos = prev
+                start = time.perf_counter()
+                
                 for i, tgt_t in enumerate(t_stamps, 1):
                     if terminate:
                         return
 
-                    frac   = i / steps
-                    x, y   = _bezier(prev, ctrl, wp, frac)
-                    wobble = random.random() < wobble_prob * ((   # decay
-                        (_euclidean((x, y), wp) / seg_total) ** 1.7)
-                    )
+                    frac = i / steps
+                    x, y = _bezier(prev, ctrl, wp, frac)
+                    
+                    # Calculate wobble with improved probability decay
+                    # More predictable wobble effect
+                    remaining_dist = _euclidean((x, y), wp) / seg_total
+                    wobble_chance = wobble_prob * (remaining_dist ** 1.7)
+                    wobble = random.random() < wobble_chance
 
                     # tighten wobble on the *very last* leg
                     if leg_idx == last_leg:
@@ -267,25 +291,42 @@ def move_to(
                             perp = (-dy, dx)
                             norm = math.hypot(*perp) or 1.0
                             perp = (perp[0] / norm, perp[1] / norm)
-                            a,b = perp
-                            perp = (random.choice([-a,a]),random.choice([-b,b]))
-                            mag  = random.randint(*wob_px) * (1 - frac)
+                            a, b = perp
+                            perp = (random.choice([-a, a]), random.choice([-b, b]))
+                            # Scale wobble with remaining distance for smoother effect
+                            mag = random.randint(*wob_px) * (1 - frac)
                             x, y = x + perp[0] * mag, y + perp[1] * mag
-
                     
-                    x,y = _constrain_travel(
-                        pyautogui.position(),(x,y),wp,
+                    # Apply direction constraints more smoothly
+                    x, y = _constrain_travel(
+                        pyautogui.position(), (x, y), wp,
                         max_direction_change
                     )
-
+                    
+                    # Prevent large jumps - limit maximum pixel movement per step
+                    if not is_simulation:
+                        curr_pos = pyautogui.position()
+                        step_dist = _euclidean(curr_pos, (x, y))
+                        max_step_dist = 30  # Maximum pixels per step
+                        
+                        if step_dist > max_step_dist:
+                            # Scale down the movement to avoid jumps
+                            ratio = max_step_dist / step_dist
+                            x = curr_pos[0] + (x - curr_pos[0]) * ratio
+                            y = curr_pos[1] + (y - curr_pos[1]) * ratio
+                    
                     x = max(1, int(x))
                     y = max(1, int(y))
+                    
+                    # Move to the new position
                     pyautogui.moveTo(x, y, _pause=0)
-                    if wobble:
-                        remain = time.time() - step_start - duration
-                        _execute_step((x,y),remain,steps-i)
-                        return
-
+                    last_pos = (x, y)
+                    
+                    # Handle wobble without recursion to avoid timing issues
+                    if wobble and i < steps:
+                        # Instead of recursively calling, just continue with adjusted timing
+                        continue
+                        
                     # occasional micro-pause
                     if not is_simulation:
                         if (
@@ -295,26 +336,39 @@ def move_to(
                             and random.random() < .10
                         ):
                             time.sleep(random.uniform(.03, pause_max_ms / 1000))
-
-                        # easing clock
-                        if i == 1:
-                            start = time.perf_counter()
-                        else:
-                            time.sleep(max(0, tgt_t - (time.perf_counter() - start)))
+                        
+                        # Improved timing control
+                        elapsed = time.perf_counter() - start
+                        sleep_time = max(0, tgt_t - elapsed)
+                        
+                        # Ensure we don't sleep too long (system might be busy)
+                        if sleep_time > 0.1:  # Cap very long sleeps
+                            sleep_time = min(sleep_time, 0.1)
+                            
+                        time.sleep(sleep_time)
 
             # ── timing baseline (cubic ease) ─────────────────────────────────
             step_distance = _euclidean(prev, wp)
 
+            # Ensure minimum movement time regardless of distance
+            min_duration = 0.1  # Never move faster than this many seconds
+            
             if speed is not None:
                 # speed = pixels per second → duration = dist / speed
                 base_dur = step_distance / speed
             else:
-                # fallback to your human‑like defaults
+                # Improved duration calculation with better lower bounds
                 base_dur = (step_distance / 700) * movement_multiplier
-                base_dur = max(0.03, min(base_dur, 0.5))
-                base_dur *= random.uniform(0.95, 1.05)
+                base_dur = max(0.05, min(base_dur, 0.5))  # Increased minimum from 0.03 to 0.05
+                
+            # Ensure minimum duration for very short movements
+            base_dur = max(min_duration, base_dur)
+            
+            # Add slight randomness but keep it consistent
+            base_dur *= random.uniform(0.97, 1.03)  # Reduced variation range
+            
             # run
-            _execute_step(prev,base_dur)
+            _execute_step(prev, base_dur)
             prev = wp
             
     finally:
