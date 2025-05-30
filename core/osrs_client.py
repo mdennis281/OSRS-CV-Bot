@@ -4,7 +4,10 @@ import mss
 import time
 from PIL import Image
 import io
-from core.tools import find_subimage, MatchResult, MatchShape, timeit, write_text_to_image, find_color_box,seconds_to_hms, find_subimages
+from core.tools import (
+    find_subimage, MatchResult, MatchShape, timeit, write_text_to_image,
+    find_color_box, seconds_to_hms, find_subimages
+)
 from core.input.mouse_control import click_in_match, move_to, ClickType, click
 from core import ocr
 from typing import Tuple, List
@@ -21,17 +24,17 @@ from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from core import tools
 from core.control import ScriptControl
-
 import os
 from PIL import ImageFilter
-from concurrent.futures import ThreadPoolExecutor
 
+# Constants
 MAXTHREAD = os.cpu_count()
 control = ScriptControl()
 POSITION_STATE = Image.open('data/ui/player-position-state.png')
 
-
+# Enums for toolplane tabs and minimap elements
 class ToolplaneTab(Enum):
+    """Represents the tabs in the RuneLite toolplane."""
     COMBAT = "combat"
     SKILLS = "skills"
     PROGRESS = "progress"
@@ -39,8 +42,7 @@ class ToolplaneTab(Enum):
     EQUIPMENT = "equipment"
     PRAYER = "prayer"
     SPELLS = "spells"
-    GROUPS = "groups"
-    FRIENDS = "friends"
+    GROUPS = "friends"
     ACCOUNT = "account"
     LOGOUT = "logout"
     SETTINGS = "settings"
@@ -48,123 +50,168 @@ class ToolplaneTab(Enum):
     MUSIC = "music"
 
 class MinimapElement(Enum):
+    """Represents elements in the RuneLite minimap."""
     HEALTH = "health"
     PRAYER = "prayer"
     RUN = "run"
     SPEC = "spec"
 
 class GenericWindow:
-    def __init__(self, window_title):
+    """Represents a generic window with functionality to interact with it."""
+    def __init__(self, window_title: str):
+        """
+        Initialize the GenericWindow instance.
+
+        Args:
+            window_title (str): The title of the window to interact with.
+        """
         self.window_title = window_title
         self.window: gw.Win32Window = None
         self._last_screenshot: Image.Image = None
         self.update_window()
 
     def update_window(self) -> gw.Win32Window:
-        """Finds and updates the RuneLite window reference."""
+        """
+        Finds and updates the RuneLite window reference.
+
+        Returns:
+            gw.Win32Window: The updated window reference.
+        """
         windows = gw.getWindowsWithTitle(self.window_title)
         self.window = windows[0] if windows else None
 
     def start_resize_watch_polling(self, on_resize=None, interval=0.2):
+        """
+        Starts a thread to monitor window resizing.
+
+        Args:
+            on_resize (callable, optional): Callback function for resize events.
+            interval (float, optional): Polling interval in seconds.
+
+        Returns:
+            threading.Event: Event to stop the polling.
+        """
         def _loop():
             while not stop_evt.is_set():
                 if self.is_open:
                     rect = (self.window.width, self.window.height)
                     if rect != last[0]:
                         last[0] = rect
-                        if on_resize: on_resize()
-                        else: self.on_resize()
+                        if on_resize:
+                            on_resize()
+                        else:
+                            self.on_resize()
                 stop_evt.wait(interval)
+
         stop_evt, last = threading.Event(), [(self.window.width, self.window.height)]
         threading.Thread(target=_loop, daemon=True).start()
-        return stop_evt  # caller .set() to stop
+        return stop_evt  # Caller can call .set() to stop
 
     @property
     def screenshot(self) -> Image.Image:
+        """
+        Returns the last cached screenshot or captures a new one.
+
+        Returns:
+            Image.Image: The screenshot of the window.
+        """
         if self._last_screenshot:
             return self._last_screenshot
         return self.get_screenshot()
 
     @property
-    def is_open(self):
-        """Returns True if the RuneLite window is open, False otherwise."""
+    def is_open(self) -> bool:
+        """
+        Checks if the RuneLite window is open.
+
+        Returns:
+            bool: True if the window is open, False otherwise.
+        """
         self.update_window()
         return self.window is not None
 
     @property
-    def dimensions(self):
-        """Returns the (width, height) of the RuneLite window."""
+    def dimensions(self) -> Tuple[int, int]:
+        """
+        Gets the dimensions of the RuneLite window.
+
+        Returns:
+            Tuple[int, int]: The width and height of the window.
+        """
         if not self.is_open:
             self.bring_to_focus()
         return (self.window.width, self.window.height)
 
     @property
-    def coordinates(self):
-        """Returns the (x, y) position of the RuneLite window."""
+    def coordinates(self) -> Tuple[int, int]:
+        """
+        Gets the coordinates of the RuneLite window.
+
+        Returns:
+            Tuple[int, int]: The x and y position of the window.
+        """
         if not self.is_open:
             self.bring_to_focus()
-        
         return (self.window.left, self.window.top)
+
     @property
-    def window_match(self):
-        x1,y1 = self.coordinates
-        w, h  = self.dimensions
-        x2, y2 = ( x1+w, y1+h )
+    def window_match(self) -> MatchResult:
+        """
+        Gets the match result for the window's bounding box.
+
+        Returns:
+            MatchResult: The match result for the window.
+        """
+        x1, y1 = self.coordinates
+        w, h = self.dimensions
+        x2, y2 = (x1 + w, y1 + h)
         return MatchResult(
-            x1,y1,x2,y2,
-            1,1,
+            x1, y1, x2, y2,
+            1, 1,
             MatchShape.RECT
         )
 
-
     def bring_to_focus(self):
-        """Brings the RuneLite window to the foreground."""
+        """
+        Brings the RuneLite window to the foreground.
+        """
         if self.is_open and not self.window.isActive:
             try:
-                # pressing alt makes activate() more reliable
+                # Pressing alt makes activate() more reliable
                 keyboard.press('alt')
                 self.window.activate()
             except:
                 self.window.minimize()
                 self.window.restore()
-                time.sleep(.3)
+                time.sleep(0.3)
             finally:
                 keyboard.release('alt')
-        
 
-    def move_off_window(self,offset = 45):
-        """Randomly moves the window 5px outside the screen in a random direction."""
+    def move_off_window(self, offset=45):
+        """
+        Randomly moves the window slightly outside the screen in a random direction.
+
+        Args:
+            offset (int, optional): Offset in pixels for the movement.
+        """
         if not self.is_open:
             return
 
         directions = ["up", "down", "left", "right"]
         direction = np.random.choice(directions)
-        
 
         if direction == "up":
-            new_x = random.randint(
-                self.window.left,
-                self.window.right
-            )
+            new_x = random.randint(self.window.left, self.window.right)
             new_y = self.window.top - offset
         elif direction == "down":
-            new_x = random.randint(
-                self.window.left,
-                self.window.left + self.window.width
-            )
+            new_x = random.randint(self.window.left, self.window.left + self.window.width)
             new_y = self.window.bottom + offset
         elif direction == "left":
             new_x = self.window.left - offset
-            new_y = random.randint(
-                self.window.top,
-                self.window.top + self.window.height
-            )
+            new_y = random.randint(self.window.top, self.window.top + self.window.height)
         elif direction == "right":
             new_x = self.window.right + offset
-            new_y = random.randint(
-                self.window.top,
-                self.window.top + self.window.height
-            )
+            new_y = random.randint(self.window.top, self.window.top + self.window.height)
 
         # Move the window to the new position
         move_to(new_x, new_y)
@@ -172,22 +219,38 @@ class GenericWindow:
     @timeit
     @control.guard
     def get_screenshot(self, maximize=True) -> Image.Image:
-        """Captures and returns a screenshot of the RuneLite window as a PIL image."""
+        """
+        Captures and returns a screenshot of the RuneLite window.
+
+        Args:
+            maximize (bool, optional): Whether to bring the window to focus before capturing.
+
+        Returns:
+            Image.Image: The screenshot of the window.
+        """
         if maximize:
             self.bring_to_focus()
         if not self.is_open:
             raise RuntimeError(f'Window {self.window_title} is not open.')
-        
+
         with mss.mss() as sct:
             bbox = (self.window.left, self.window.top, self.window.left + self.window.width, self.window.top + self.window.height)
             sct_img = sct.grab(bbox)
             img = Image.frombytes('RGB', sct_img.size, sct_img.rgb)
-        
+
         self._last_screenshot = img
         return self._last_screenshot
 
-    def save_screenshot(self, filename="runelite_screenshot.png"):
-        """Saves a screenshot of the RuneLite window to a file."""
+    def save_screenshot(self, filename="runelite_screenshot.png") -> str | None:
+        """
+        Saves a screenshot of the RuneLite window to a file.
+
+        Args:
+            filename (str, optional): The filename to save the screenshot.
+
+        Returns:
+            str | None: The filename if saved successfully, None otherwise.
+        """
         screenshot = self.get_screenshot()
         if screenshot:
             screenshot.save(filename)
@@ -830,14 +893,17 @@ class RuneLiteClient(GenericWindow):
 
     
     def on_resize(self):
+        """
+        Handles the window resize event by recalculating UI sectors and components.
+        """
         print("resized!")
         sc = self.get_screenshot()
 
         match_jobs = [
-            (self.minimap.find_matches, (sc,),             {}),
-            (self.toolplane.find_matches, (sc,),           {}),               
-            (self.sectors.find_matches,  (sc, self.ui_type), {}),             
-            # (other_component.find_matches, (sc, ...), {}),                  
+            (self.minimap.find_matches, (sc,), {}),
+            (self.toolplane.find_matches, (sc,), {}),
+            (self.sectors.find_matches, (sc, self.ui_type), {}),
+            # (other_component.find_matches, (sc, ...), {}),
         ]
 
         with ThreadPoolExecutor(max_workers=min(MAXTHREAD, len(match_jobs))) as pool:
@@ -939,21 +1005,31 @@ class UIType(Enum):
     FIXED = 'fixed'
 
 class UISectors:
+    """Represents UI sectors such as the toolplane and chat areas."""
     toolplane: MatchResult = None
     chat: MatchResult = None
 
     def find_matches(self, sc: Image.Image, uitype: UIType):
-        # toolplane
+        """
+        Finds and sets the matches for UI sectors based on the UI type.
+
+        Args:
+            sc (Image.Image): The screenshot of the RuneLite window.
+            uitype (UIType): The type of UI (modern, classic, etc.).
+        """
+        # Determine the toolplane template based on the UI type
         if uitype == UIType.MODERN:
             toolplane = Image.open('data/ui/toolplane-modern.png')
         else:
             toolplane = Image.open('data/ui/toolplane-classic.png')
         
+        # Find the toolplane match
         self.toolplane = find_subimage(
             sc, toolplane,
-            min_scale=1,max_scale=1
+            min_scale=1, max_scale=1
         )
 
+        # Find the chat area matches
         chat_bottom_right = Image.open('data/ui/chat-bottom-right.png')
         chat_top_left = Image.open('data/ui/chat-top-left.png')
 
