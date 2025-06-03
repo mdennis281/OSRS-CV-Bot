@@ -405,6 +405,13 @@ class RuneLiteClient(GenericWindow):
                 # necessary for getting active tab
                 self.get_screenshot()
 
+    def mouse_position(self) -> Tuple[int, int]:
+        """
+        Returns the current mouse position relative to the RuneLite window.
+        """
+        x, y = pyautogui.position()
+        return (x - self.window.left, y - self.window.top)
+
     @timeit
     def get_minimap_stat(self, element: MinimapElement) -> int:
         self.get_screenshot()
@@ -469,9 +476,6 @@ class RuneLiteClient(GenericWindow):
         print(f"{item_name} | Confidence: {round(match.confidence*100,2)}%")
         
         if match.confidence < min_confidence:
-            match.crop_in(sc).show()
-            icon.show()
-
             raise ValueError(f"Item {item_name} not found in window. Confidence: {match.confidence}")
         plane = self.sectors.toolplane
         match = match.transform(plane.start_x,plane.start_y)
@@ -526,7 +530,7 @@ class RuneLiteClient(GenericWindow):
             item_identifier,
             tab,
             min_confidence,
-            crop
+            crop=crop
         )
         
             
@@ -726,15 +730,36 @@ class RuneLiteClient(GenericWindow):
 
         raise ValueError(f"Could not determine skilling state for substring: {substring}. No red or green pixels found in {img.size} image.")
         
-    def is_moving(self, sleep_between=.5, retry_cnt=2) -> bool:
+    def is_moving(self, sleep_between=.7, retry_cnt=2) -> bool:
         """
         Checks if the player is moving by comparing the 
         player's position at two different times.
         """
-        p1 = self.get_position(retry_cnt)
+        # Use a list to store position results from threads
+        positions: List[PlayerPosition] = [None, None]
+        
+        def get_pos_and_store(index):
+            positions[index] = self.get_position(retry_cnt)
+        
+        # Get first position
+        t1 = threading.Thread(target=get_pos_and_store, args=(0,))
+        t2 = threading.Thread(target=get_pos_and_store, args=(1,))
+        t1.start()
+        
         time.sleep(sleep_between)
-        p2 = self.get_position(retry_cnt)
-        return not p1.tile == p2.tile 
+        
+        
+        t2.start()
+        
+        t1.join()
+        t2.join()
+        
+        # Ensure we got valid position data
+        if None in positions or not all(hasattr(p, 'tile') for p in positions if p is not None):
+            return False
+            
+        # Compare positions to determine movement
+        return positions[0].tile != positions[1].tile
     
     def get_position(self,retry_cnt=0) -> 'PlayerPosition':
         def do_ocr(match: MatchResult, sc: Image.Image) -> str:
@@ -846,11 +871,17 @@ class RuneLiteClient(GenericWindow):
             tile_color, # (255,0,50)
             hover_text, # 'furnace'
             retry_hover=3,
-            retry_match=2
+            retry_match=3,
+            filter_out: List[MatchResult] = None
         ):
         for mult in range(retry_match):
             time.sleep(3*mult) # 0 on first try
             sc = self.get_screenshot()
+            if filter_out:
+                for match in filter_out:
+                    sc = match.remove_from(sc)
+            if mult + 1 >= retry_match:
+                self.move_off_window()
             match = find_color_box(
                 sc,tile_color,
                 tol=40+(10*mult)
@@ -859,7 +890,8 @@ class RuneLiteClient(GenericWindow):
                 self.smart_click_match(
                     match,
                     hover_text,
-                    retry_hover
+                    retry_hover,
+                    center_point=True if mult == 0 else False,
                 )
                 return
             except Exception as e:
@@ -872,12 +904,14 @@ class RuneLiteClient(GenericWindow):
             hover_texts:str | List[str], # 'furnace' | ['furnace','smelt']
             retry_hover=3,
             click_cnt=1,
-            click_type=ClickType.LEFT
+            click_type=ClickType.LEFT,
+            center_point=False
         ):
         ans = ''
         for _ in range(retry_hover):
-            point = match.get_point_within()
+            point = match.get_center() if center_point else match.get_point_within()
             self.move_to(point,rand_move_chance=0)
+            time.sleep(random.uniform(0.1, 0.2))
 
             ans = self.get_hover_text()
             print(f"Hover text: {ans}")
@@ -934,10 +968,13 @@ class RuneLiteClient(GenericWindow):
                 if isinstance(match, MatchResult):
                     sc = match.remove_from(sc)
         if chat:
-            sc = self.sectors.chat.remove_from(sc)
+            m = self.sectors.chat.copy()
+            m.end_y = m.end_y + 25
+            sc = m.remove_from(sc)
         if minimap:
-            # TODO: minimap sector
-            pass
+            m = self.minimap.map.scale_px(30)
+            m = m.transform(-20,20)
+            sc = m.remove_from(sc)
         return sc
 
     def get_screenshot(self, maximize=True) -> Image.Image:
@@ -1182,7 +1219,7 @@ class MinimapContext:
 
     def get_minimap_stat(self,match: MatchResult, screenshot: Image.Image) -> int:
         """Returns the health value from the screenshot."""
-        match = self.get_minimap_value_match(match, screenshot)
+        match = self.get_minimap_value_match(match)
         return match.extract_number(screenshot, ocr.FontChoice.RUNESCAPE_SMALL)
     @timeit
     def find_matches(self, screenshot: Image.Image):

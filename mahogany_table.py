@@ -46,9 +46,9 @@ def main():
             PORTAL_TILE,
             'Build'
         )
+    
         propose_break()
-
-        sleep(5)
+        while client.is_moving(): continue
 
         for _ in range(4):
             if not planks_in_inventory():
@@ -62,6 +62,7 @@ def main():
                     'Remove'
                 )
                 if terminate: break
+                while client.is_moving(): continue
                 chat_text_clicker(
                     'Yes',
                     'Waiting for table'
@@ -75,6 +76,7 @@ def main():
                     TABLE_TILE,
                     'Build'
                 )
+                while client.is_moving(): continue
             except Exception as e:
                 print(e)
                 print('couldnt find build button, lets assume it got pressed')
@@ -86,10 +88,11 @@ def main():
                 try:
                     match = client.find_in_window(
                         MAHOGANY_TABLE,
-                        confidence=.98
+                        min_confidence=.98
                     )
                     break
                 except Exception as e:
+                    print(e)
                     print('missed mahogany table build btn')
 
             if match:
@@ -102,7 +105,7 @@ def main():
             PORTAL_TILE,
             'Enter'
         )
-        sleep(3)
+        while client.is_moving(): continue
     total_time = tools.seconds_to_hms(time.time() - start_time)
     print(f'Grinded for {total_time}')
     
@@ -122,14 +125,16 @@ def unnote_planks(recurse=0):
             client.click_item(
                 PLANKS_NOTE,
                 crop=(0,13,0,0), # crop top off planks (count)
-                min_confidence=.89
+                min_confidence=.87
             )
-        except:
+        except Exception as e:
+            print(e)
             print('wheres the noted planks')
             client.click_toolplane(ToolplaneTab.SKILLS)
             client.move_off_window()
             time.sleep(random.randint(1,6))
             continue
+        
         if terminate: break
         try:
             client.smart_click_tile(
@@ -138,6 +143,7 @@ def unnote_planks(recurse=0):
                 retry_hover=2,
                 retry_match=10
             )
+            
         except:
             print('phials match miss')
             # unselect plank
@@ -146,6 +152,7 @@ def unnote_planks(recurse=0):
             time.sleep(random.randint(1,6))
             
             continue
+        while client.is_moving(): continue
         try:
             if terminate: break
             chat_text_clicker(

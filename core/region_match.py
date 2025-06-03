@@ -84,8 +84,12 @@ class RegionMixin(ABC):
 
     def transform(self, dx: int, dy: int) -> MatchResult:
         return self._shallow_copy(offset=(dx, dy))
+    
+    def copy(self) -> MatchResult:
+        """Shallow copy of the region (no offset, no grow)."""
+        return self._shallow_copy()
 
-    def scale_px(self, pixels: int):
+    def scale_px(self, pixels: int) -> MatchResult:
         return self._shallow_copy(grow=pixels)
 
     # convenience
@@ -118,9 +122,23 @@ class MatchResult(RegionMixin):
     @property
     def width(self) -> int:
         return self.end_x - self.start_x
+    @width.setter
+    def width(self, new_width: int) -> None:
+        center_x = (self.start_x + self.end_x) // 2
+        half_width = new_width // 2
+        self.start_x = center_x - half_width
+        self.end_x = center_x + half_width
+
+
     @property
     def height(self) -> int:
         return self.end_y - self.start_y
+    @height.setter
+    def height(self, new_height: int) -> None:
+        center_y = (self.start_y + self.end_y) // 2
+        half_height = new_height // 2
+        self.start_y = center_y - half_height
+        self.end_y = center_y + half_height
 
     def contains(self, x: int, y: int) -> bool:
         if self.shape is MatchShape.RECT:
@@ -209,9 +227,10 @@ class ShapeResult(RegionMixin):
     def contains(self, x: int, y: int) -> bool:
         """Ray‑casting point‑in‑polygon (odd‑even rule)."""
         inside = False
+        epsilon = 1e-9  # Small value to prevent division by zero
         for (x0, y0), (x1, y1) in zip(self.points, self.points[1:]):
             if ((y0 > y) != (y1 > y)) and \
-               (x < (x1 - x0) * (y - y0) / (y1 - y0 + 1e-6) + x0):
+               (x < (x1 - x0) * (y - y0) / (max(y1 - y0, epsilon)) + x0):
                 inside = not inside
         return inside
 
