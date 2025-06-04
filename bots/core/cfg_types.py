@@ -41,6 +41,26 @@ class StringParam:
     def __repr__(self):
         return f"StringValue({self.value})"
     
+class StringListParam:
+    def __init__(self, value: List[str]):
+        self.value = value
+
+    @staticmethod
+    def type() -> str:
+        return "StringList"
+    
+    @staticmethod
+    def load(value: List[str]) -> 'StringListParam':
+        if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
+            raise ValueError("StringList value must be a list of strings.")
+        return StringListParam(value)
+
+    def val(self) -> List[str]:
+        return self.value
+    
+    def __repr__(self):
+        return f"StringListValue({self.value})"
+    
 class IntParam:
     def __init__(self, value: int):
         self.value = value
@@ -231,4 +251,4 @@ class RouteParam:
         return f"RouteValue({self.waypoints})"
     
 
-TYPES = [BooleanParam, StringParam, IntParam, FloatParam, RGBParam, WaypointParam, RouteParam]
+TYPES = [BooleanParam, StringParam, IntParam, FloatParam, RGBParam, WaypointParam, RouteParam, StringListParam]
