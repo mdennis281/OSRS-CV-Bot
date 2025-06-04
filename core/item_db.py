@@ -102,6 +102,19 @@ class ItemLookup:
         Retrieves an item by its name (case-insensitive).
         """
         return self._items_by_name.get(name.lower())
+    
+    def get_item(self, item: Any) -> Optional[Item]:
+        """
+        Retrieves an item by its ID or name.
+        
+        If the input is an integer, it is treated as an item ID.
+        If the input is a string, it is treated as an item name (case-insensitive).
+        """
+        if isinstance(item, int):
+            return self.get_item_by_id(item)
+        elif isinstance(item, str):
+            return self.get_item_by_name(item)
+        return None
 
     def search_items(self, query: str) -> Dict[int, Item]:
         """

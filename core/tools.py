@@ -310,7 +310,21 @@ from functools import wraps
 import time
 import inspect
 from PIL import ImageFont
+import re
+from difflib import SequenceMatcher
 
+def text_similarity(text1: str, text2: str) -> float:
+            """
+            Calculate the similarity ratio between two strings using SequenceMatcher.
+
+            Args:
+                text1 (str): The first string.
+                text2 (str): The second string.
+
+            Returns:
+                float: The similarity ratio (0.0 to 1.0).
+            """
+            return SequenceMatcher(None, text1, text2).ratio()
 
 def timeit(func):
     """Improved decorator that shows ClassName.method only when the call

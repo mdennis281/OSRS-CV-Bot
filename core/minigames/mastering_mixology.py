@@ -11,6 +11,9 @@ import random
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 from core.region_match import MatchResult, MatchShape
+import cv2
+import numpy as np
+import pyautogui
 
 MOX = (3, 169, 244)
 AGA = (0, 230, 118)
@@ -81,14 +84,17 @@ class MasteringMixology():
             bot: Bot,
             mixer_tile = RGBParam(255, 110, 50),
             station_tile: RGBParam = RGBParam(100, 50, 200),
-            quick_action_tile: RGBParam = RGBParam(255, 0, 255)
-
+            quick_action_tile: RGBParam = RGBParam(255, 0, 255),
+            digweed_tile: RGBParam = RGBParam(0, 255, 0),
+            ingredient_exclude: List[str] = [],
         ):
         self.bot = bot
         self.potions: dict = self.get_potions()
         self.mixer_tile = mixer_tile.value
         self.station_tile = station_tile.value
         self.quick_action_tile = quick_action_tile.value
+        self.digweed_tile = digweed_tile.value
+        self.ingredient_exclude = ingredient_exclude
         self.order_ui = self.get_order_ui()
         self.log = get_logger('MixologyHelper')
         
@@ -103,7 +109,8 @@ class MasteringMixology():
             potions[pot_name] = potion_image
         return potions
     
-    def fill_potion(self, potion_name: str,_retry: int = 3):
+    def fill_potion(self, potion_name: str, _retry: int = 4):
+        self.find_digweed()
         potion_name = potion_name.upper()
         try:
             for i in range(3):
@@ -126,26 +133,60 @@ class MasteringMixology():
                         ['lye'],
                         filter_out=[self.order_ui]
                     )
-                # will need to move to the mixer tile
-                if i == 0:
-                    while self.bot.client.is_moving():
-                        continue
-                else:
-                    time.sleep(
-                        random.uniform(.25, .75)
-                    )
+
+                while self.bot.client.is_moving():
+                    continue
+                self.find_digweed()
+                time.sleep(random.uniform(0.1, 0.3))  # delay so camera can catch up
+
         except Exception as e:
             if _retry > 0:
                 self.log.warning(f"Error filling potion {potion_name}: {e}. Retrying...")
-                self.fill_potion(potion_name, _retry - 1)
+                return self.fill_potion(potion_name, _retry - 1)
             else:
-                self.log.error(f"Exhausted retries for filling potion {potion_name}.")
+                self.log.error(f"Exhausted retries filling potion {potion_name}.")
                 raise e
-
+            
+        # now we have all ingredients, click the mixer tile
         self.bot.client.smart_click_tile(
             self.mixer_tile,
             ['take', '-from', 'mix']
         )
+        # validation
+        while self.bot.client.is_moving():
+            continue
+        empty = 'the mixing vessel is currently empty'
+        if self.bot.client.is_text_in_chat(empty):
+            if _retry > 0:
+                self.log.error(f'Failed to fill potion {potion_name}. Retrying...')
+                return self.fill_potion(potion_name, _retry - 1)
+            raise Exception(f"Exhausted retries filling potion {potion_name}.")
+        
+        missing_ingredients = 'you don\'t have enough reagents to mix that potion. you'
+        if self.bot.client.is_text_in_chat(missing_ingredients):
+            raise Exception(f'Missing ingredients for {potion_name}.')
+        self.find_digweed()
+    
+    def find_digweed(self):
+        digweed = None
+        try:
+            sc = self.bot.client.get_filtered_screenshot()
+            digweed = tools.find_color_box(sc, self.digweed_tile, tol=30)
+        except:
+            pass
+        if digweed and digweed.size_px > 30:
+            for _ in range(3):
+                try:
+                    self.bot.client.smart_click_match(
+                        digweed, 
+                        ['dig', 'weed', 'mature'],
+                        retry_hover=5
+                    )
+                    return
+                except:
+                    pass
+                digweed = tools.find_color_box(sc, self.digweed_tile, tol=30)
+
 
     def follow_station(self):
         sc = self.bot.client.get_filtered_screenshot()
@@ -179,6 +220,7 @@ class MasteringMixology():
             m.transform(0, 75)
         ]
         orders: List[Order] = []
+        excluded: List[Order] = []
         for o in matches:
             o.width = 200
             o.height = 25
@@ -189,9 +231,16 @@ class MasteringMixology():
                 match=o
             )
             if not order.is_done(sc):
-                orders.append(
-                    order
-                )
+                if order.ingredients not in self.ingredient_exclude:
+                    orders.append(
+                        order
+                    )
+                else:
+                    self.log.info(f"Excluding order with ingredients: {order.ingredients}")
+                    excluded.append(order)
+        if len(orders) == 0:
+            self.log.info("No valid orders found, doing one excluded")
+            orders.append(excluded[0])
         return orders
 
     def _get_order_action(self, order: tools.MatchResult) -> Action:
@@ -237,6 +286,7 @@ class MasteringMixology():
 
     def do_action_station(self, order: Order, _retry: int = 1):
         # Click the station and wait for movement to complete
+        self.find_digweed()
         self.bot.client.smart_click_tile(
             self.station_tile,
             Action.get_action_text(order.action),
@@ -245,11 +295,14 @@ class MasteringMixology():
         while self.bot.client.is_moving():
             self.follow_station()
         self.follow_station()
+        time.sleep(.5) # camera delay
+        self.follow_station()
         
         # Get initial state
         state = self._get_station_state(order)
         click_cnt = 0
         loop_count = 0
+        
         
         # Set up thread communication
         quick_action_detected = threading.Event()
@@ -262,27 +315,28 @@ class MasteringMixology():
         )
         monitor_thread.daemon = True
         monitor_thread.start()
-        
+        max_retort_clicks = random.randint(5, 7)
         try:
             while state:
                 # Check if quick action was detected by monitor thread
                 if quick_action_detected.is_set():
                     self.log.info("Quick action detected! Performing immediate action...")
-                    self.bot.client.click(
-                        self.bot.client.mouse_position(),
-                        click_cnt=2 if order.action == Action.AGITATOR else 1,
-                        rand_move_chance=0,
-                        min_click_interval=0.01
-                    )
+                    click_cnt = 2 if order.action == Action.AGITATOR else 1
+
+                    for _ in range(click_cnt):
+                        # using pyautogui to go as fast as possible
+                        duration = random.uniform(0.05, 0.15)
+                        pyautogui.click(duration=duration)
+                        time.sleep(random.uniform(0.1, 0.2))
                     quick_action_detected.clear()
-                    time.sleep(random.uniform(0.1, 0.3))
+                    time.sleep(random.uniform(0.3, 0.5))
                 
                 elif state == 1:
                     if order.action == Action.RETORT:
                         if order.is_done(self.bot.client.get_screenshot()):
                             self.log.info(f"Order {order.ingredients} completed at station with action {order.action}.")
                             break
-                        if click_cnt < 5:
+                        if click_cnt < max_retort_clicks:
                             self.bot.client.click(
                                 self.bot.client.mouse_position(),
                                 click_cnt=1,
@@ -309,7 +363,7 @@ class MasteringMixology():
             # Always clean up thread
             stop_monitoring.set()
             monitor_thread.join(timeout=1.0)
-            
+
         if not order.is_done(self.bot.client.get_screenshot()):
             raise Exception(f"Failed to complete order {order.ingredients} at station with action {order.action}.")
     
@@ -328,8 +382,8 @@ class MasteringMixology():
                 
                 # Create a match result for a 30x30 area around cursor
                 search_area = MatchResult(
-                    x - 15, y - 15, 
-                    x + 15, y + 15,
+                    x - 20, y - 20, 
+                    x + 20, y + 20,
                     confidence=1.0, 
                     scale=1.0,
                     shape=MatchShape.RECT
@@ -337,16 +391,30 @@ class MasteringMixology():
                 
                 try:
                     # Get screenshot and check for color
-                    sc = self.bot.client.get_filtered_screenshot()
+                    sc = self.bot.client.get_screenshot()
                     crop = search_area.crop_in(sc)
                     
                     # Check if the quick action tile color exists in the cropped area
-                    color_match = tools.find_color_box(crop, self.quick_action_tile, tol=30)
+                    # Convert the cropped image to HSV for better color detection
+                    crop_hsv = cv2.cvtColor(np.array(crop), cv2.COLOR_RGB2HSV)
+                    quick_action_hsv = cv2.cvtColor(
+                        np.uint8([[self.quick_action_tile]]), cv2.COLOR_RGB2HSV
+                    )[0][0]
+
+                    # Define a range around the target color
+                    lower_bound = np.array([max(quick_action_hsv[0] - 3, 0), 50, 50])
+                    upper_bound = np.array([min(quick_action_hsv[0] + 3, 179), 255, 255])
+
+                    # Create a mask for the color range
+                    mask = cv2.inRange(crop_hsv, lower_bound, upper_bound)
+
+                    # Check if the mask has more than 10 non-zero pixels
+                    color_match = np.count_nonzero(mask) > 10
                     
-                    if color_match and color_match.confidence > 0.7:
+                    if color_match:
                         detected_event.set()
                         # Short pause to avoid constant triggers
-                        time.sleep(0.05)
+                        time.sleep(1)
                 except Exception as e:
                     self.log.warning(f"Error checking for quick action: {e}")
                 

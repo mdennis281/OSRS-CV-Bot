@@ -27,6 +27,7 @@ from core.control import ScriptControl
 import os
 from PIL import ImageFilter
 
+
 # Constants
 MAXTHREAD = os.cpu_count()
 control = ScriptControl()
@@ -1000,10 +1001,40 @@ class RuneLiteClient(GenericWindow):
             confidence=ocr_match['confidence']
         )
         return match.transform(chat.start_x,chat.start_y)
+    
+    
         
     def click_chat_text(self,text):
         match = self.find_chat_text(text)
         self.click(match)
+
+    def is_text_in_chat(self, text: str, confidence=.7) -> bool:
+        """
+        Checks if the given text is present in the RuneLite chat.
+        tip: use a full line of text for best results.
+        """
+        text = text.lower()
+        chat_text = self.get_chat_text().lower()
+        for line in chat_text.splitlines():
+            similar = tools.text_similarity(line, text)
+            if similar >= confidence:
+                print(f'Similarity score: {similar}')
+                return True
+        return False
+
+    def get_chat_text(self) -> str:
+        chat = self.sectors.chat
+
+        sc = self.get_screenshot()
+        sc = chat.crop_in(sc)
+
+        return ocr.execute(
+            sc,
+            font=ocr.FontChoice.RUNESCAPE,
+            psm=ocr.TessPsm.SPARSE_TEXT,
+            raise_on_blank=False,
+            preprocess=True
+        )
 
 
         

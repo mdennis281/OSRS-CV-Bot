@@ -223,6 +223,25 @@ class ShapeResult(RegionMixin):
     def bounding_box(self):
         xs, ys = zip(*self.points)
         return min(xs), min(ys), max(xs), max(ys)
+    
+    @property
+    def size_px(self) -> int:
+        """
+        Calculate the area of the polygon in pixels using the Shoelace formula.
+        Returns the absolute value as int.
+        """
+        # Handle edge cases
+        if len(self.points) <= 2:  # Not enough points for a polygon
+            return 0
+        
+        # Shoelace formula
+        area = 0
+        for i in range(len(self.points) - 1):  # Last point is same as first for closed polygons
+            x1, y1 = self.points[i]
+            x2, y2 = self.points[i+1]
+            area += x1 * y2 - x2 * y1
+        
+        return abs(area) // 2  # Integer division to return an int
 
     def contains(self, x: int, y: int) -> bool:
         """Ray‑casting point‑in‑polygon (odd‑even rule)."""
