@@ -1,4 +1,4 @@
-from bots.master_mixer import BotConfig, BotExecutor
+from bots.woodcutter import BotConfig, BotExecutor
 
 
 def main():
