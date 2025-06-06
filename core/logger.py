@@ -97,6 +97,9 @@ Server -> Client Messages:
 # --- WebSocket‐streaming Log Handler ------------------------------------------
 # ------------------------------------------------------------------------------
 
+# Global client subscriptions dictionary to be shared between functions
+client_subscriptions = {}
+
 class WebSocketLogHandler(logging.Handler):
     """
     A logging.Handler that serializes each LogRecord to JSON and pushes it
@@ -104,14 +107,21 @@ class WebSocketLogHandler(logging.Handler):
     """
     def __init__(self):
         super().__init__()
-        # We’ll use our own JSON formatting; no need for a Formatter here.
+        # We'll use our own JSON formatting; no need for a Formatter here.
+
+    def formatTime(self, record, datefmt=None):
+        """Format the time using elapsed time since program start."""
+        elapsed_seconds = record.created - _start_time
+        hours, remainder = divmod(int(elapsed_seconds), 3600)
+        minutes, seconds = divmod(remainder, 60)
+        return f"{hours:02}:{minutes:02}:{seconds:02}"
 
     def emit(self, record: logging.LogRecord) -> None:
         try:
             # Build a dictionary containing all the context we want:
             payload = {
                 "type": "log",
-                "timestamp": self.formatTime(record, datefmt="%Y-%m-%d %H:%M:%S"),
+                "timestamp": self.formatTime(record),
                 "logger_name": record.name,
                 "level": record.levelname,
                 "message": record.getMessage(),
@@ -119,8 +129,9 @@ class WebSocketLogHandler(logging.Handler):
                 **(record.__dict__.get("extra", {})),  
             }
             text = json.dumps(payload)
-        except Exception:
-            # If formatting fails, bail silently (we don't want logging to crash)
+        except Exception as e:
+            # If formatting fails, log error and bail
+            print(f"Error formatting log: {e}")
             return
 
         # Schedule sending to clients on the websocket event loop
@@ -132,14 +143,19 @@ class WebSocketLogHandler(logging.Handler):
         Asynchronously send `text` to every connected WebSocket client
         that is subscribed to this logger.
         """
+        global client_subscriptions
+        print(f"Broadcasting to {len(_ws_clients)} clients, subscriptions: {client_subscriptions}")
+        
         to_remove = []
         for ws in _ws_clients:
             try:
                 # Check if this client is subscribed to this logger
                 subscribed_loggers = client_subscriptions.get(ws)
+                # Send if subscribed to all (None) or specifically to this logger
                 if subscribed_loggers is None or logger_name in subscribed_loggers:
                     await ws.send(text)
-            except Exception:
+            except Exception as e:
+                print(f"Error sending to client: {e}")
                 # If sending fails, mark for removal
                 to_remove.append(ws)
 
@@ -159,7 +175,7 @@ def _start_websocket_server(host: str = "0.0.0.0", port: int = 8765) -> None:
     This function is intended to run in its own thread. It creates a new
     asyncio loop, starts a simple WebSocket server, and runs forever.
     """
-    global _ws_event_loop, _ws_server_started
+    global _ws_event_loop, _ws_server_started, client_subscriptions
     with _ws_start_lock:
         if _ws_server_started:
             return  # already running
@@ -172,9 +188,10 @@ def _start_websocket_server(host: str = "0.0.0.0", port: int = 8765) -> None:
 
     # Client subscriptions - maps websocket to list of loggers they're subscribed to
     # None means "all loggers" (default)
+    global client_subscriptions
     client_subscriptions = {}
 
-    async def ws_handler(ws: websockets.WebSocketServerProtocol, path: str):
+    async def ws_handler(ws: websockets.WebSocketServerProtocol):
         # When a client connects, add it to our set
         _ws_clients.add(ws)
         client_subscriptions[ws] = None  # Subscribe to all loggers by default
