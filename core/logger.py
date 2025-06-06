@@ -106,11 +106,14 @@ def _start_websocket_server(host: str = "localhost", port: int = 8765) -> None:
         finally:
             _ws_clients.discard(ws)
 
-    # Start the WebSocket server
-    server_coro = websockets.serve(ws_handler, host, port)
-    server = loop.run_until_complete(server_coro)
+    # Define the WebSocket server startup in an async function
+    async def start_server():
+        server = await websockets.serve(ws_handler, host, port, loop=loop)
+        print(f"[WebSocketLogHandler] Running on ws://{host}:{port}/")
+        return server
 
-    print(f"[WebSocketLogHandler] Running on ws://{host}:{port}/")
+    # Start the WebSocket server
+    server = loop.run_until_complete(start_server())
 
     try:
         loop.run_forever()
