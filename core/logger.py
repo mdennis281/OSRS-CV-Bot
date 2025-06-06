@@ -6,6 +6,10 @@ import threading
 import asyncio
 import json
 import websockets
+import time  # Add time module import
+
+# Track when the application started
+_start_time = time.time()
 
 # ------------------------------------------------------------------------------
 # --- Global state for the WebSocket server and connected clients -------------
@@ -128,6 +132,21 @@ def _ensure_ws_thread_started():
 
 
 # ------------------------------------------------------------------------------
+# --- Custom elapsed time formatter --------------------------------------------
+# ------------------------------------------------------------------------------
+
+class ElapsedTimeFormatter(logging.Formatter):
+    """
+    A formatter that shows time elapsed since program start in format hh:mm:ss
+    """
+    def formatTime(self, record, datefmt=None):
+        elapsed_seconds = record.created - _start_time
+        hours, remainder = divmod(int(elapsed_seconds), 3600)
+        minutes, seconds = divmod(remainder, 60)
+        return f"{hours:02}:{minutes:02}:{seconds:02}"
+
+
+# ------------------------------------------------------------------------------
 # --- LoggerWrapper (with WebSocket integration) -------------------------------
 # ------------------------------------------------------------------------------
 
@@ -180,9 +199,8 @@ class LoggerWrapper:
 
     @staticmethod
     def _get_default_formatter() -> logging.Formatter:
-        return logging.Formatter(
-            fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S"
+        return ElapsedTimeFormatter(
+            fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
         )
 
 
