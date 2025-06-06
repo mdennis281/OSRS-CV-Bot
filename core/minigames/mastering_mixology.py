@@ -112,30 +112,23 @@ class MasteringMixology():
     def fill_potion(self, potion_name: str, _retry: int = 4):
         self.find_digweed()
         potion_name = potion_name.upper()
+        c_key = {'M': MOX, 'A': AGA, 'L': LYE}
+        n_key = {'M': 'mox', 'A': 'aga', 'L': 'lye'}
         try:
             for i in range(3):
                 ingredient = potion_name[i]
-                if ingredient == 'M':
-                    self.bot.client.smart_click_tile(
-                        MOX,
-                        ['mox'],
-                        filter_out=[self.order_ui]
-                    )
-                elif ingredient == 'A':
-                    self.bot.client.smart_click_tile(
-                        AGA,
-                        ['aga'],
-                        filter_out=[self.order_ui]
-                    )
-                elif ingredient == 'L':
-                    self.bot.client.smart_click_tile(
-                        LYE,
-                        ['lye'],
-                        filter_out=[self.order_ui]
-                    )
+                self.bot.client.smart_click_tile(
+                    c_key[ingredient],
+                    [n_key[ingredient]],
+                    filter_out=[self.order_ui]
+                )
 
-                while self.bot.client.is_moving():
-                    continue
+                if i < 2:
+                    self.bot.client.follow_tile(
+                        c_key[potion_name[i + 1]],
+                        filter_out=[self.order_ui],
+                        filter_ui=True
+                    )
                 self.find_digweed()
                 time.sleep(random.uniform(0.1, 0.3))  # delay so camera can catch up
 
@@ -162,9 +155,9 @@ class MasteringMixology():
                 return self.fill_potion(potion_name, _retry - 1)
             raise Exception(f"Exhausted retries filling potion {potion_name}.")
         
-        missing_ingredients = 'you don\'t have enough reagents to mix that potion. you'
-        if self.bot.client.is_text_in_chat(missing_ingredients):
-            raise Exception(f'Missing ingredients for {potion_name}.')
+        missing_ingredients = 'are missing the following'
+        if self.bot.client.is_text_in_chat(missing_ingredients, .5):
+            raise MissingIngredientError()
         self.find_digweed()
     
     def find_digweed(self):
@@ -182,6 +175,8 @@ class MasteringMixology():
                         ['dig', 'weed', 'mature'],
                         retry_hover=5
                     )
+                    while self.bot.client.is_moving():
+                        continue
                     return
                 except:
                     pass
@@ -189,15 +184,9 @@ class MasteringMixology():
 
 
     def follow_station(self):
-        sc = self.bot.client.get_filtered_screenshot()
-        try:
-            station = tools.find_color_box(sc, self.station_tile, tol=30)
-            self.bot.client.move_to(
-                station.get_center(), 
-                rand_move_chance=0
-            )
-        except:
-            pass
+        self.bot.client.follow_tile(
+            self.station_tile
+        )
 
         
     def get_order_ui(self) -> tools.MatchResult:
@@ -290,48 +279,31 @@ class MasteringMixology():
         self.bot.client.smart_click_tile(
             self.station_tile,
             Action.get_action_text(order.action),
-            filter_out=[self.order_ui]
+            filter_out=[self.order_ui],
+            filter_ui=True
         )
-        while self.bot.client.is_moving():
-            self.follow_station()
-        self.follow_station()
-        time.sleep(.5) # camera delay
-        self.follow_station()
-        
         # Get initial state
         state = self._get_station_state(order)
         click_cnt = 0
         loop_count = 0
         
-        
-        # Set up thread communication
-        quick_action_detected = threading.Event()
         stop_monitoring = threading.Event()
         
         # Start quick action monitoring thread
         monitor_thread = threading.Thread(
-            target=self._quick_action_monitor, 
-            args=(quick_action_detected, stop_monitoring)
+            target=self._quick_action_executor, 
+            args=(order, stop_monitoring)
         )
         monitor_thread.daemon = True
         monitor_thread.start()
         max_retort_clicks = random.randint(5, 7)
-        try:
-            while state:
-                # Check if quick action was detected by monitor thread
-                if quick_action_detected.is_set():
-                    self.log.info("Quick action detected! Performing immediate action...")
-                    click_cnt = 2 if order.action == Action.AGITATOR else 1
 
-                    for _ in range(click_cnt):
-                        # using pyautogui to go as fast as possible
-                        duration = random.uniform(0.05, 0.15)
-                        pyautogui.click(duration=duration)
-                        time.sleep(random.uniform(0.1, 0.2))
-                    quick_action_detected.clear()
-                    time.sleep(random.uniform(0.3, 0.5))
+        self.follow_station()
+
+        try:
+            while state:    
                 
-                elif state == 1:
+                if state == 1:
                     if order.action == Action.RETORT:
                         if order.is_done(self.bot.client.get_screenshot()):
                             self.log.info(f"Order {order.ingredients} completed at station with action {order.action}.")
@@ -367,7 +339,7 @@ class MasteringMixology():
         if not order.is_done(self.bot.client.get_screenshot()):
             raise Exception(f"Failed to complete order {order.ingredients} at station with action {order.action}.")
     
-    def _quick_action_monitor(self, detected_event, stop_event):
+    def _quick_action_executor(self, order: Order, stop_event: threading.Event):
         """
         Thread function to monitor for quick action tiles near cursor.
         
@@ -412,9 +384,16 @@ class MasteringMixology():
                     color_match = np.count_nonzero(mask) > 10
                     
                     if color_match:
-                        detected_event.set()
-                        # Short pause to avoid constant triggers
+                        self.log.info("Quick action detected! Performing immediate action...")
+                        click_cnt = 2 if order.action == Action.AGITATOR else 1
+
+                        for _ in range(click_cnt):
+                            # using pyautogui to go as fast as possible
+                            duration = random.uniform(0.03, 0.1)
+                            pyautogui.click(duration=duration)
+                            time.sleep(random.uniform(0.2, 0.4))
                         time.sleep(1)
+
                 except Exception as e:
                     self.log.warning(f"Error checking for quick action: {e}")
                 
@@ -499,9 +478,12 @@ class MasteringMixology():
 
 
 
-
-
-
+class MissingIngredientError(Exception):
+    """
+    Exception raised when a required ingredient is missing.
+    """
+    def __init__(self):
+        super().__init__(f"Missing required ingredients")
 
 
 

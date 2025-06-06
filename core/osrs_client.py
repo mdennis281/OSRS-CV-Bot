@@ -32,6 +32,7 @@ from PIL import ImageFilter
 MAXTHREAD = os.cpu_count()
 control = ScriptControl()
 POSITION_STATE = Image.open('data/ui/player-position-state.png')
+ACTION_HOVER = Image.open('data/ui/action-hover.png')
 
 # Enums for toolplane tabs and minimap elements
 class ToolplaneTab(Enum):
@@ -573,6 +574,8 @@ class RuneLiteClient(GenericWindow):
         menu_match = self.get_right_click_menu(sc)
 
         menu = menu_match.crop_in(sc)
+        menu = tools.mask_above_color_value(menu, 150)
+        
 
         ocr_match = ocr.find_string_bounds(
             menu,
@@ -586,11 +589,11 @@ class RuneLiteClient(GenericWindow):
             ocr_match['y2'],
             confidence=ocr_match['confidence']
         )
-        print(match)
         match = match.transform(
             menu_match.start_x,
             menu_match.start_y
         )
+        
         self.click(match,rand_move_chance=0)
 
 
@@ -669,6 +672,12 @@ class RuneLiteClient(GenericWindow):
     def is_cooking(self) -> bool:
         try:
             return self.get_skilling_state('cook')
+        except Exception as e:
+            return False
+    @property
+    def is_woodcutting(self) -> bool:
+        try:
+            return self.get_skilling_state('logs')
         except Exception as e:
             return False
     @property
@@ -854,6 +863,8 @@ class RuneLiteClient(GenericWindow):
             matches += tools.find_subimages(
                 sc, item_icon, min_confidence=min_confidence
             )
+        if not matches:
+            return []
         if x_sort is None: x_sort = random.choice([True, False])
         if y_sort is None: y_sort = random.choice([True, False])
         matches.sort(
@@ -867,17 +878,57 @@ class RuneLiteClient(GenericWindow):
         matches = [m.transform(tp.start_x,tp.start_y) for m in matches]
         return matches
 
+    def follow_tile(
+            self,
+            tile_color: Tuple[int, int, int] = (255, 0, 50),
+            filter_ui:bool = True, # if True, will filter out UI elements
+            filter_out: List[MatchResult] = None
+    ):
+        stop = threading.Event()
+        def _loop_find():
+            while not stop.is_set():
+                sc = self.get_filtered_screenshot() if filter_ui else self.get_screenshot()
+                t = None
+                if filter_out:
+                    for match in filter_out:
+                        sc = match.remove_from(sc)
+                try:
+                    m = tools.find_color_box(
+                        sc,
+                        tile_color,
+                        tol=40,
+                    )
+                    
+                    x,y = m.get_center()
+                    x = int(x + self.window.left)
+                    y = int(y + self.window.top)
+                    if t:
+                        t.join()
+                    t = threading.Thread(target=move_to,args=(x,y,0,0,0))
+                    t.start()
+                except Exception as e:
+                    print(f"Error following tile: {e}")
+            
+        t = threading.Thread(target=_loop_find, daemon=True)
+        t.start()
+        while self.is_moving():
+            continue
+        time.sleep(0.5)  # Give it a moment to settle
+        stop.set()
+
+
     def smart_click_tile(
             self,
             tile_color, # (255,0,50)
             hover_text, # 'furnace'
             retry_hover=3,
             retry_match=3,
-            filter_out: List[MatchResult] = None
+            filter_ui: bool = False, # if True, will filter out UI elements
+            filter_out: List[MatchResult] = None,
         ):
         for mult in range(retry_match):
             time.sleep(3*mult) # 0 on first try
-            sc = self.get_screenshot()
+            sc = self.get_screenshot(filter_ui)
             if filter_out:
                 for match in filter_out:
                     sc = match.remove_from(sc)
@@ -892,7 +943,7 @@ class RuneLiteClient(GenericWindow):
                     match,
                     hover_text,
                     retry_hover,
-                    center_point=True if mult == 0 else False,
+                    center_point=True if mult == 0 else False
                 )
                 return
             except Exception as e:
@@ -906,26 +957,61 @@ class RuneLiteClient(GenericWindow):
             retry_hover=3,
             click_cnt=1,
             click_type=ClickType.LEFT,
-            center_point=False
+            center_point=False,
         ):
-        ans = ''
         for _ in range(retry_hover):
             point = match.get_center() if center_point else match.get_point_within()
             self.move_to(point,rand_move_chance=0)
             time.sleep(random.uniform(0.1, 0.2))
 
-            ans = self.get_hover_text()
-            print(f"Hover text: {ans}")
+            answers = self.get_hover_texts()
+            print(f"Hover text: {answers}")
             if isinstance(hover_texts, str):
                 hover_texts = [hover_texts]
             for hover_text in hover_texts:
-                if hover_text.lower() in ans.lower():
-                    click(-1,-1,click_type=click_type,click_cnt=click_cnt)
-                    return
+                for ans in answers:
+                    if hover_text.lower() in ans.lower():
+                        click(-1,-1,click_type=click_type,click_cnt=click_cnt)
+                        return
         raise RuntimeError(f'[SmartClick] cant find match {hover_texts}. Hover text: "{ans}"')
 
+    def get_hover_texts(self) -> List[str]:
+        """
+        Retrieves hover texts from both the hover text and action hover areas in parallel.
 
+        Returns:
+            List[str]: A list containing hover text and action hover text.
+        """
+        def fetch_hover_text():
+            return self.get_hover_text()
 
+        def fetch_action_hover():
+            return self.get_action_hover()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [
+                executor.submit(fetch_hover_text),
+                executor.submit(fetch_action_hover)
+            ]
+            return [future.result() for future in as_completed(futures)]
+
+    def compare_hover_match(self, target: str) -> float:
+        """
+        Compares the hover text with a target string.
+
+        Args:
+            target (str): The target string to compare against.
+
+        Returns:
+            bool: True if the hover text matches the target, False otherwise.
+        """
+        hover_text = self.get_hover_texts()
+        max_match = 0
+        for text in hover_text:
+            match = tools.text_similarity(text, target)
+            if match > max_match:
+                max_match = match
+        return max_match
     
     def on_resize(self):
         """
@@ -960,6 +1046,7 @@ class RuneLiteClient(GenericWindow):
             toolplane: bool = True,
             chat: bool = True,
             minimap: bool = True,
+            sidebar: bool = True
         ) -> Image.Image:
         sc = self.get_screenshot()
         if toolplane:
@@ -976,10 +1063,15 @@ class RuneLiteClient(GenericWindow):
             m = self.minimap.map.scale_px(30)
             m = m.transform(-20,20)
             sc = m.remove_from(sc)
+        if sidebar:
+            end_tp = self.sectors.toolplane.end_x
+            sc = sc.crop((0,0,end_tp+5,sc.height))
         return sc
 
-    def get_screenshot(self, maximize=True) -> Image.Image:
-        self._last_screenshot = super().get_screenshot(maximize)
+    def get_screenshot(self, filtered=False) -> Image.Image:
+        if filtered:
+            return self.get_filtered_screenshot()
+        self._last_screenshot = super().get_screenshot(True)
         return self._last_screenshot
     
     def find_chat_text(self,text):
@@ -1035,6 +1127,74 @@ class RuneLiteClient(GenericWindow):
             raise_on_blank=False,
             preprocess=True
         )
+    
+    @control.guard
+    def get_action_hover(self) -> str:
+        """
+        Gets the hover text from the action bar below the cursor.
+        """
+        try:
+            h_start = ACTION_HOVER.crop((
+                0, 0, 
+                10, ACTION_HOVER.height
+            ))
+            h_end = ACTION_HOVER.crop((
+                ACTION_HOVER.width - 10, 0, 
+                ACTION_HOVER.width, ACTION_HOVER.height
+            ))
+            c_x, c_y = self.mouse_position()
+            sc = self.get_screenshot()
+
+            hover_box = MatchResult(
+                c_x - 45, c_y - 20, 
+                c_x + 20, c_y + 45
+            )
+            sc = hover_box.debug_draw(sc, color=(255, 0, 0))
+
+            start = self.find_in_window(
+                h_start,
+                sub_match=hover_box,
+                min_scale=1, max_scale=1,
+                min_confidence=0.95
+            )
+            
+
+            end_x = min(self.window_match.end_x , start.start_x + 350)
+            end_y = min(self.window_match.end_y, start.start_y + 25)
+
+            hover_box = MatchResult(
+                start.start_x, start.start_y,
+                end_x, end_y
+            )
+            
+            end = self.find_in_window(
+                h_end,
+                sub_match=hover_box,
+                min_scale=1, max_scale=1,
+                min_confidence=0.95
+            )
+
+            action = MatchResult(
+                start.start_x, start.start_y,
+                end.end_x, end.end_y
+            )
+            action_img = action.crop_in(self.get_screenshot())
+            action_txt = tools.mask_above_color_value(
+                action_img,
+                threshold=150
+            )
+            ans = ocr.execute(
+                action_txt,
+                font=ocr.FontChoice.RUNESCAPE_SMALL,
+                psm=ocr.TessPsm.SINGLE_LINE,
+                raise_on_blank=False,
+                preprocess=False
+            )
+            return ans
+        except Exception as e:
+            return None
+
+
 
 
         

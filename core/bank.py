@@ -63,25 +63,26 @@ class BankInterface:
     def smart_quantity(self, match:tools.MatchResult, amount:int, action:str):
         if amount < 5 and amount > 0:
             self.client.click(match, click_cnt=amount)
-        elif amount == 5:
-            self.client.click(match, click_type=ClickType.RIGHT, after_click_settle_chance=0)
-            self.client.choose_right_click_opt(f'{action}-5')
-        elif amount == 10:
-            self.client.click(match, click_type=ClickType.RIGHT, after_click_settle_chance=0)
-            self.client.choose_right_click_opt(f'{action}-10')
-        elif amount == -1:
-            self.client.click(match, click_type=ClickType.RIGHT, after_click_settle_chance=0)
-            self.client.choose_right_click_opt(f'{action}-All')
         else:
-            self.client.click(match, click_type=ClickType.RIGHT, after_click_settle_chance=0)
-            if self.last_custom_quanity == amount:
-                self.client.choose_right_click_opt(f'{action}-{amount}')
+            self.client.click(
+                match, click_type=ClickType.RIGHT, 
+                after_click_settle_chance=0, rand_move_chance=0
+            )
+            if amount == 5:
+                self.client.choose_right_click_opt(f'{action}-5')
+            elif amount == 10:
+                self.client.choose_right_click_opt(f'{action}-10')
+            elif amount == -1:
+                self.client.choose_right_click_opt(f'{action}-All')
             else:
-                self.client.choose_right_click_opt(f'{action}-X')
-                time.sleep(random.uniform(1,1.3))
-                keyboard.write(str(amount),delay=.2)
-                keyboard.press('enter')
-                self.last_custom_quanity = amount
+                if self.last_custom_quanity == amount:
+                    self.client.choose_right_click_opt(f'{action}-{amount}')
+                else:
+                    self.client.choose_right_click_opt(f'{action}-X')
+                    time.sleep(random.uniform(1,1.3))
+                    keyboard.write(str(amount),delay=.2)
+                    keyboard.press('enter')
+                    self.last_custom_quanity = amount
 
                 
     
@@ -90,29 +91,35 @@ class BankInterface:
         Withdraw an item from the bank.
         -1 quantity = all
         """
-
-        if isinstance(item_id, str):
-            item = self.itemdb.get_item_by_name(item_id)
-        else:
-            item = self.itemdb.get_item_by_id(item_id)
+        item = self.itemdb.get_item(item_id)
 
         if not item: raise ValueError(f'Item {item_id} not found in itemdb')
 
         item_ico = item.icon.crop((0,13,item.icon.width,item.icon.height))
 
-        item = self.client.find_in_window(
+        item_match = self.client.find_in_window(
             item_ico,
             min_scale=.9,
             max_scale=1.1,
             min_confidence=.1,
             sub_match=self.bank_match
         )
-        self.client.click(
-            item,click_type=ClickType.RIGHT,
-            after_click_settle_chance=0
+        self.client.move_to(
+            item_match
         )
+        likelihood = self.client.compare_hover_match(item.name)
 
-        self.smart_quantity(item, amount, 'Withdraw')
+        print(f'Item {item.name} likelihood: {likelihood:.2f}')
+        if likelihood < .6:
+            raise ValueError(f'Item {item.name} not found in bank')
+        
+        # self.client.click(
+        #     item_match,click_type=ClickType.RIGHT,
+        #     after_click_settle_chance=0,
+        #     rand_move_chance=0
+        # )
+
+        self.smart_quantity(item_match, amount, 'Withdraw')
         
 
 

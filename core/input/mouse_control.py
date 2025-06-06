@@ -167,7 +167,6 @@ def click_in_match(
 def move_to(
     tx: int,
     ty: int,
-    *,
     overshoot_prob: float = .40,
     wobble_prob:   float = .8,
     pause_prob:    float = .18,

@@ -306,6 +306,26 @@ def find_color_box(
     return ShapeResult(points=ordered, confidence=confidence)
 
 
+def mask_above_color_value(
+        image: Image.Image,
+        threshold: int = 200,
+):
+    """
+    Create a mask for pixels in the image that have a color value above the specified threshold.
+    The mask will be a new image where pixels above the threshold are set to white, and all other pixels are set to black.
+    """
+    # Create a binary mask based on the threshold for RGB channels
+    mask = Image.new("L", image.size, 0)  # Create a black mask
+
+    for x in range(image.width):
+        for y in range(image.height):
+            r, g, b = image.getpixel((x, y))
+            if r > threshold or g > threshold or b > threshold:
+                mask.putpixel((x, y), 255)
+
+    return mask.convert("L")
+
+
 from functools import wraps
 import time
 import inspect
@@ -313,18 +333,39 @@ from PIL import ImageFont
 import re
 from difflib import SequenceMatcher
 
-def text_similarity(text1: str, text2: str) -> float:
-            """
-            Calculate the similarity ratio between two strings using SequenceMatcher.
-
-            Args:
-                text1 (str): The first string.
-                text2 (str): The second string.
-
-            Returns:
-                float: The similarity ratio (0.0 to 1.0).
-            """
-            return SequenceMatcher(None, text1, text2).ratio()
+def text_similarity(basetext: str, subtext: str) -> float:
+    """
+    Calculate similarity for a potential substring match.
+    
+    For exact substring matches, returns 1.0.
+    Otherwise, finds the best matching segment within basetext.
+    
+    Args:
+        basetext (str): The full text to search within.
+        subtext (str): The text expected to be a partial or full substring.
+        
+    Returns:
+        float: The similarity ratio (0.0 to 1.0), with 1.0 indicating exact substring match.
+    """
+    # Fast path for exact substring
+    if subtext in basetext:
+        return 1.0
+    
+    # Otherwise find best matching segment
+    best_ratio = 0.0
+    subtext_len = len(subtext)
+    
+    # For very short subtexts, revert to general similarity
+    if subtext_len <= 3:
+        return SequenceMatcher(None, basetext, subtext).ratio()
+    
+    # Slide a window of subtext length through basetext
+    for i in range(len(basetext) - subtext_len + 1):
+        window = basetext[i:i+subtext_len]
+        ratio = SequenceMatcher(None, window, subtext).ratio()
+        best_ratio = max(best_ratio, ratio)
+    
+    return best_ratio
 
 def timeit(func):
     """Improved decorator that shows ClassName.method only when the call
