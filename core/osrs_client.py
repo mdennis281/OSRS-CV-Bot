@@ -1098,7 +1098,93 @@ class RuneLiteClient(GenericWindow):
         )
         return match.transform(chat.start_x,chat.start_y)
     
+    def get_chat_text(self) -> str:
+        chat = self.sectors.chat
+
+        sc = self.get_screenshot()
+        sc = chat.crop_in(sc)
+
+        return ocr.execute(
+            sc,
+            font=ocr.FontChoice.RUNESCAPE,
+            psm=ocr.TessPsm.SPARSE_TEXT,
+            raise_on_blank=False,
+            preprocess=True
+        )
     
+    @control.guard
+    def get_action_hover(self) -> str:
+        """
+        Gets the hover text from the action bar below the cursor.
+        """
+        try:
+            h_start = ACTION_HOVER.crop((
+                0, 0, 
+                10, ACTION_HOVER.height
+            ))
+            h_end = ACTION_HOVER.crop((
+                ACTION_HOVER.width - 10, 0, 
+                ACTION_HOVER.width, ACTION_HOVER.height
+            ))
+            c_x, c_y = self.mouse_position()
+            sc = self.get_screenshot()
+
+            hover_box = MatchResult(
+                c_x - 45, c_y - 20, 
+                c_x + 20, c_y + 45
+            )
+            sc = hover_box.debug_draw(sc, color=(255, 0, 0))
+
+            start = self.find_in_window(
+                h_start,
+                sub_match=hover_box,
+                min_scale=1, max_scale=1,
+                min_confidence=0.95
+            )
+            
+
+            end_x = min(self.window_match.end_x , start.start_x + 350)
+            end_y = min(self.window_match.end_y, start.start_y + 25)
+
+            hover_box = MatchResult(
+                start.start_x, start.start_y,
+                end_x, end_y
+            )
+            
+            end = self.find_in_window(
+                h_end,
+                sub_match=hover_box,
+                min_scale=1, max_scale=1,
+                min_confidence=0.95
+            )
+
+            action = MatchResult(
+                start.start_x, start.start_y,
+                end.end_x, end.end_y
+            )
+            action_img = action.crop_in(self.get_screenshot())
+            action_txt = tools.mask_above_color_value(
+                action_img,
+                threshold=150
+            )
+            ans = ocr.execute(
+                action_txt,
+                font=ocr.FontChoice.RUNESCAPE_SMALL,
+                psm=ocr.TessPsm.SINGLE_LINE,
+                raise_on_blank=False,
+                preprocess=False
+            )
+            return ans
+        except Exception as e:
+            return None
+
+
+
+
+        
+        
+
+
         
     def click_chat_text(self,text):
         match = self.find_chat_text(text)
