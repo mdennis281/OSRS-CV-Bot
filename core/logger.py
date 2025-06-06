@@ -339,7 +339,7 @@ class ElapsedTimeFormatter(logging.Formatter):
 # --- LoggerWrapper (with WebSocket integration) -------------------------------
 # ------------------------------------------------------------------------------
 
-default_log_level = logging.INFO  # Default log level if not specified
+default_log_level = logging.DEBUG  # Default log level if not specified
 
 class LoggerWrapper:
     def __init__(self):
@@ -350,6 +350,8 @@ class LoggerWrapper:
         _set_logger_level = self.set_logger_level
         # Kick off the WebSocket server thread on first use:
         _ensure_ws_thread_started()
+        # Configure root logger to DEBUG
+        logging.basicConfig(level=logging.DEBUG)
     
     def get_logger_names(self) -> list[str]:
         """
@@ -429,6 +431,34 @@ class LoggerWrapper:
             
         self._loggers[logger_name].setLevel(level_map[level])
 
+    def set_all_loggers_level(self, level: str) -> None:
+        """
+        Set the logging level for all loggers at once.
+        
+        Args:
+            level: Level name ('DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL')
+        
+        Raises:
+            ValueError: If level is invalid
+        """
+        level_map = {
+            'DEBUG': logging.DEBUG,
+            'INFO': logging.INFO,
+            'WARNING': logging.WARNING,
+            'ERROR': logging.ERROR,
+            'CRITICAL': logging.CRITICAL
+        }
+        
+        if level not in level_map:
+            raise ValueError(f"Invalid log level: {level}")
+            
+        for logger_name, logger in self._loggers.items():
+            logger.setLevel(level_map[level])
+            # Also update all handlers
+            for handler in logger.handlers:
+                handler.setLevel(level_map[level])
+            print(f"Set {logger_name} to {level}")
+
 
 # Singleton instance of LoggerWrapper
 _logger_wrapper = LoggerWrapper()
@@ -439,3 +469,16 @@ def get_logger(
     level: int = default_log_level
 ) -> logging.Logger:
     return _logger_wrapper.get_logger(name, log_to_file, level)
+
+# Add these utility functions
+def set_all_loggers_level(level: str) -> None:
+    """Set all loggers to the specified level."""
+    _logger_wrapper.set_all_loggers_level(level)
+
+def set_debug() -> None:
+    """Convenience function to set all loggers to DEBUG level."""
+    set_all_loggers_level('DEBUG')
+
+def set_info() -> None:
+    """Convenience function to set all loggers to INFO level."""
+    set_all_loggers_level('INFO')
