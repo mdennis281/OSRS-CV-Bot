@@ -26,6 +26,7 @@ from core import tools
 from core.control import ScriptControl
 import os
 from PIL import ImageFilter
+from core.logger import get_logger
 
 
 # Constants
@@ -67,6 +68,7 @@ class GenericWindow:
         Args:
             window_title (str): The title of the window to interact with.
         """
+        self.log = get_logger('GenericWindow')
         self.window_title = window_title
         self.window: gw.Win32Window = None
         self._last_screenshot: Image.Image = None
@@ -371,22 +373,24 @@ class GenericWindow:
 
 class RuneLiteClient(GenericWindow):
     def __init__(self,username=''):
-        print('[RLClient init] Instantiating...')
         start_time = time.time()
         super().__init__(f'RuneLite - {username}')
+        self.log = get_logger('RLClient')
+        self.log.info('Initializing RuneLite client...')
+        
         self.minimap = MinimapContext()
         self.toolplane = ToolplaneContext()
         self.item_db = ItemLookup()
         self.sectors: UISectors = UISectors()
 
         self.ui_type: UIType = self.get_ui_type()
-        print(f'[RLClient init] UI Type: {self.ui_type.value}')
-        print(f'[RLClient init] finding sectors')
+        self.log.info(f'UI Type detected: {self.ui_type.value}')
+        self.log.debug('Finding UI sectors...')
         
         self.on_resize()
         self.start_resize_watch_polling()
         elapsed = seconds_to_hms(time.time() - start_time)
-        print(f'[RLClient init] Instantiated in {elapsed}')
+        self.log.info(f'Client initialized successfully in {elapsed}')
         
 
     
@@ -475,7 +479,7 @@ class RuneLiteClient(GenericWindow):
             item.icon, sc, min_scale=1,max_scale=1
         )
 
-        print(f"{item_name} | Confidence: {round(match.confidence*100,2)}%")
+        self.log.debug(f"Found {item_name} with confidence: {round(match.confidence*100,2)}%")
         
         if match.confidence < min_confidence:
             raise ValueError(f"Item {item_name} not found in window. Confidence: {match.confidence}")
@@ -509,8 +513,8 @@ class RuneLiteClient(GenericWindow):
             )
             
         except Exception as e: 
+            self.log.error(f'Failed to get count for item: {item_identifier} - {str(e)}')
             match.debug_draw(self.screenshot).show()
-            print('failed on item:',item_identifier)
             return 0
             
         
@@ -685,13 +689,13 @@ class RuneLiteClient(GenericWindow):
         try: 
              return self.get_skilling_state('ball')
         except Exception as e:
-            print(f"Error checking cannonball state: {e}")
+            self.log.error(f"Error checking cannonball state: {str(e)}")
             try:
                 m = self.find_item('Steel bar', min_confidence=0.95)
                 if m and m.confidence > 0.95:
                     return True
             except Exception as e:
-                print(f"Error checking steel bar: {e}")
+                self.log.error(f"Error checking for steel bar: {str(e)}")
 
         return False
     
@@ -793,7 +797,7 @@ class RuneLiteClient(GenericWindow):
         if match.confidence < 0.99:
             if retry_cnt > 0:
                 time.sleep(1)
-                print(f"Retrying get_position: {retry_cnt} attempts left")
+                self.log.info(f"Retrying position detection: {retry_cnt} attempts remaining")
                 return self.get_position(retry_cnt=retry_cnt-1)
             raise RuntimeError('Missing plugin: "World Location" please install & enable "Grid Location" with "Grid Info Type" == "UniqueID"')
     
@@ -816,21 +820,21 @@ class RuneLiteClient(GenericWindow):
         tile_val = results["tile"].result()
         if not tile_val and retry_cnt > 0:
             time.sleep(1)
-            print(f"Retrying get_position: {retry_cnt} attempts left")
+            self.log.warning(f"Failed to read tile position, retrying: {retry_cnt} attempts left")
             return self.get_position(retry_cnt=retry_cnt-1)
         tile_ans = tuple(int(t.strip()) for t in tile_val.split(',') if t.isdigit())
 
         chunk_val = results["chunk"].result()
         if not chunk_val and retry_cnt > 0:
             time.sleep(1)
-            print(f"Retrying get_position: {retry_cnt} attempts left")
+            self.log.warning(f"Failed to read chunk position, retrying: {retry_cnt} attempts left")
             return self.get_position(retry_cnt=retry_cnt-1)
         chunk_ans = int(chunk_val.strip())
 
         region_val = results["region"].result()
         if not region_val and retry_cnt > 0:
             time.sleep(1)
-            print(f"Retrying get_position: {retry_cnt} attempts left")
+            self.log.warning(f"Failed to read region position, retrying: {retry_cnt} attempts left")
             return self.get_position(retry_cnt=retry_cnt-1)
         region_ans = int(region_val.strip())
 
@@ -858,7 +862,7 @@ class RuneLiteClient(GenericWindow):
                 
             item_icon = itm.icon
             if not item_icon:
-                print(f"Item icon for '{item}' not found.")
+                self.log.warning(f"Item icon for '{item}' not found.")
                 continue
             matches += tools.find_subimages(
                 sc, item_icon, min_confidence=min_confidence
@@ -907,7 +911,7 @@ class RuneLiteClient(GenericWindow):
                     t = threading.Thread(target=move_to,args=(x,y,0,0,0))
                     t.start()
                 except Exception as e:
-                    print(f"Error following tile: {e}")
+                    self.log.error(f"Error following tile: {str(e)}")
             
         t = threading.Thread(target=_loop_find, daemon=True)
         t.start()
@@ -965,7 +969,7 @@ class RuneLiteClient(GenericWindow):
             time.sleep(random.uniform(0.1, 0.2))
 
             answers = self.get_hover_texts()
-            print(f"Hover text: {answers}")
+            self.log.debug(f"Hover texts detected: {answers}")
             if isinstance(hover_texts, str):
                 hover_texts = [hover_texts]
             for hover_text in hover_texts:
@@ -1017,7 +1021,7 @@ class RuneLiteClient(GenericWindow):
         """
         Handles the window resize event by recalculating UI sectors and components.
         """
-        print("resized!")
+        self.log.debug("Window resize detected - recalculating UI elements")
         sc = self.get_screenshot()
 
         match_jobs = [
@@ -1110,95 +1114,9 @@ class RuneLiteClient(GenericWindow):
         for line in chat_text.splitlines():
             similar = tools.text_similarity(line, text)
             if similar >= confidence:
-                print(f'Similarity score: {similar}')
+                self.log.debug(f'Text match in chat with similarity: {similar:.2f}')
                 return True
         return False
-
-    def get_chat_text(self) -> str:
-        chat = self.sectors.chat
-
-        sc = self.get_screenshot()
-        sc = chat.crop_in(sc)
-
-        return ocr.execute(
-            sc,
-            font=ocr.FontChoice.RUNESCAPE,
-            psm=ocr.TessPsm.SPARSE_TEXT,
-            raise_on_blank=False,
-            preprocess=True
-        )
-    
-    @control.guard
-    def get_action_hover(self) -> str:
-        """
-        Gets the hover text from the action bar below the cursor.
-        """
-        try:
-            h_start = ACTION_HOVER.crop((
-                0, 0, 
-                10, ACTION_HOVER.height
-            ))
-            h_end = ACTION_HOVER.crop((
-                ACTION_HOVER.width - 10, 0, 
-                ACTION_HOVER.width, ACTION_HOVER.height
-            ))
-            c_x, c_y = self.mouse_position()
-            sc = self.get_screenshot()
-
-            hover_box = MatchResult(
-                c_x - 45, c_y - 20, 
-                c_x + 20, c_y + 45
-            )
-            sc = hover_box.debug_draw(sc, color=(255, 0, 0))
-
-            start = self.find_in_window(
-                h_start,
-                sub_match=hover_box,
-                min_scale=1, max_scale=1,
-                min_confidence=0.95
-            )
-            
-
-            end_x = min(self.window_match.end_x , start.start_x + 350)
-            end_y = min(self.window_match.end_y, start.start_y + 25)
-
-            hover_box = MatchResult(
-                start.start_x, start.start_y,
-                end_x, end_y
-            )
-            
-            end = self.find_in_window(
-                h_end,
-                sub_match=hover_box,
-                min_scale=1, max_scale=1,
-                min_confidence=0.95
-            )
-
-            action = MatchResult(
-                start.start_x, start.start_y,
-                end.end_x, end.end_y
-            )
-            action_img = action.crop_in(self.get_screenshot())
-            action_txt = tools.mask_above_color_value(
-                action_img,
-                threshold=150
-            )
-            ans = ocr.execute(
-                action_txt,
-                font=ocr.FontChoice.RUNESCAPE_SMALL,
-                psm=ocr.TessPsm.SINGLE_LINE,
-                raise_on_blank=False,
-                preprocess=False
-            )
-            return ans
-        except Exception as e:
-            return None
-
-
-
-
-        
-        
 
     @property
     def quick_prayer_active(self) -> bool:
