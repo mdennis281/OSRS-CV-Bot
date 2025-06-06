@@ -25,6 +25,73 @@ _ws_event_loop: asyncio.AbstractEventLoop | None = None
 _ws_start_lock = threading.Lock()
 _ws_server_started = False
 
+# Function to get logger names - will be set by LoggerWrapper
+_get_logger_names = None
+
+# Function to set log level - will be set by LoggerWrapper 
+_set_logger_level = None
+
+# ----------------------------------------------------------------------------
+# --- WebSocket API Schemas and Commands ---------------------------------------
+# ----------------------------------------------------------------------------
+"""
+WebSocket API for Logger System
+
+Client -> Server Commands:
+--------------------------
+1. Get All Loggers:
+   { "command": "get_loggers" }
+   
+   Response:
+   { "type": "loggers_list", "loggers": ["logger1", "logger2", ...] }
+
+2. Get Logger Info:
+   { "command": "get_logger_info", "logger_name": "my_logger" }
+   
+   Response:
+   { 
+     "type": "logger_info", 
+     "logger": "my_logger", 
+     "level": "INFO",
+     "handlers": ["console", "file", "websocket"] 
+   }
+
+3. Set Logger Level:
+   { "command": "set_logger_level", "logger_name": "my_logger", "level": "DEBUG" }
+   
+   Response:
+   { "type": "level_changed", "logger": "my_logger", "level": "DEBUG" }
+
+4. Subscribe To Specific Loggers:
+   { "command": "subscribe", "loggers": ["logger1", "logger2"] }
+   
+   Response:
+   { "type": "subscription_changed", "subscribed": ["logger1", "logger2"] }
+
+5. Ping/Health Check:
+   { "command": "ping" }
+   
+   Response:
+   { "type": "pong", "timestamp": "12:34:56", "active_connections": 3 }
+
+Server -> Client Messages:
+-------------------------
+1. Log Message:
+   {
+     "type": "log",
+     "timestamp": "00:12:34", 
+     "logger_name": "my_logger",
+     "level": "INFO",
+     "message": "This is a log message"
+   }
+
+2. Error Response:
+   {
+     "type": "error",
+     "error_code": "unknown_logger",
+     "message": "Logger 'unknown' does not exist"
+   }
+"""
 
 # ------------------------------------------------------------------------------
 # --- WebSocket‐streaming Log Handler ------------------------------------------
@@ -43,6 +110,7 @@ class WebSocketLogHandler(logging.Handler):
         try:
             # Build a dictionary containing all the context we want:
             payload = {
+                "type": "log",
                 "timestamp": self.formatTime(record, datefmt="%Y-%m-%d %H:%M:%S"),
                 "logger_name": record.name,
                 "level": record.levelname,
@@ -52,22 +120,25 @@ class WebSocketLogHandler(logging.Handler):
             }
             text = json.dumps(payload)
         except Exception:
-            # If formatting fails, bail silently (we don’t want logging to crash)
+            # If formatting fails, bail silently (we don't want logging to crash)
             return
 
         # Schedule sending to clients on the websocket event loop
         if _ws_event_loop and _ws_event_loop.is_running():
-            asyncio.run_coroutine_threadsafe(self._broadcast(text), _ws_event_loop)
+            asyncio.run_coroutine_threadsafe(self._broadcast(text, record.name), _ws_event_loop)
 
-    async def _broadcast(self, text: str) -> None:
+    async def _broadcast(self, text: str, logger_name: str) -> None:
         """
-        Asynchronously send `text` to every connected WebSocket client.
-        If a send fails, remove that client from the set.
+        Asynchronously send `text` to every connected WebSocket client
+        that is subscribed to this logger.
         """
         to_remove = []
         for ws in _ws_clients:
             try:
-                await ws.send(text)
+                # Check if this client is subscribed to this logger
+                subscribed_loggers = client_subscriptions.get(ws)
+                if subscribed_loggers is None or logger_name in subscribed_loggers:
+                    await ws.send(text)
             except Exception:
                 # If sending fails, mark for removal
                 to_remove.append(ws)
@@ -75,6 +146,8 @@ class WebSocketLogHandler(logging.Handler):
         # Clean up any dead connections
         for ws in to_remove:
             _ws_clients.discard(ws)
+            if ws in client_subscriptions:
+                del client_subscriptions[ws]
 
 
 # ------------------------------------------------------------------------------
@@ -97,18 +170,114 @@ def _start_websocket_server(host: str = "localhost", port: int = 8765) -> None:
     asyncio.set_event_loop(loop)
     _ws_event_loop = loop
 
+    # Client subscriptions - maps websocket to list of loggers they're subscribed to
+    # None means "all loggers" (default)
+    client_subscriptions = {}
+
     async def ws_handler(ws: websockets.WebSocketServerProtocol, path: str):
         # When a client connects, add it to our set
         _ws_clients.add(ws)
+        client_subscriptions[ws] = None  # Subscribe to all loggers by default
         try:
-            # Keep the connection open until client disconnects
-            await ws.wait_closed()
+            # Keep the connection open and handle messages
+            async for message in ws:
+                try:
+                    data = json.loads(message)
+                    command = data.get('command')
+                    
+                    if command == 'get_loggers' and _get_logger_names:
+                        # Get the list of logger names
+                        logger_names = _get_logger_names()
+                        await ws.send(json.dumps({
+                            'type': 'loggers_list',
+                            'loggers': logger_names
+                        }))
+                        
+                    elif command == 'get_logger_info' and _get_logger_names:
+                        logger_name = data.get('logger_name')
+                        if not logger_name or logger_name not in _get_logger_names():
+                            await ws.send(json.dumps({
+                                'type': 'error',
+                                'error_code': 'unknown_logger',
+                                'message': f"Logger '{logger_name}' does not exist"
+                            }))
+                        else:
+                            # This would need logger_info functionality to be implemented
+                            # For now, just return basic info we know
+                            await ws.send(json.dumps({
+                                'type': 'logger_info',
+                                'logger': logger_name,
+                                'level': 'INFO',  # Simplified - would need actual level
+                                'handlers': ['console', 'websocket']  # Basic assumption
+                            }))
+                            
+                    elif command == 'set_logger_level' and _set_logger_level:
+                        logger_name = data.get('logger_name')
+                        level = data.get('level')
+                        try:
+                            _set_logger_level(logger_name, level)
+                            await ws.send(json.dumps({
+                                'type': 'level_changed',
+                                'logger': logger_name,
+                                'level': level
+                            }))
+                        except Exception as e:
+                            await ws.send(json.dumps({
+                                'type': 'error',
+                                'error_code': 'level_change_failed',
+                                'message': str(e)
+                            }))
+                            
+                    elif command == 'subscribe':
+                        loggers = data.get('loggers')
+                        if loggers is None:
+                            client_subscriptions[ws] = None  # All loggers
+                        else:
+                            client_subscriptions[ws] = list(loggers)
+                        await ws.send(json.dumps({
+                            'type': 'subscription_changed',
+                            'subscribed': loggers if loggers else "all"
+                        }))
+                        
+                    elif command == 'ping':
+                        elapsed = time.time() - _start_time
+                        hours, remainder = divmod(int(elapsed), 3600)
+                        minutes, seconds = divmod(remainder, 60)
+                        timestamp = f"{hours:02}:{minutes:02}:{seconds:02}"
+                        await ws.send(json.dumps({
+                            'type': 'pong',
+                            'timestamp': timestamp,
+                            'active_connections': len(_ws_clients)
+                        }))
+                        
+                    else:
+                        await ws.send(json.dumps({
+                            'type': 'error',
+                            'error_code': 'unknown_command',
+                            'message': f"Unknown command: {command}"
+                        }))
+                        
+                except json.JSONDecodeError:
+                    await ws.send(json.dumps({
+                        'type': 'error',
+                        'error_code': 'invalid_json',
+                        'message': "Invalid JSON message"
+                    }))
+                except Exception as e:
+                    print(f"Error handling WebSocket message: {e}")
+                    await ws.send(json.dumps({
+                        'type': 'error',
+                        'error_code': 'server_error',
+                        'message': str(e)
+                    }))
         finally:
             _ws_clients.discard(ws)
+            if ws in client_subscriptions:
+                del client_subscriptions[ws]
 
     # Define the WebSocket server startup in an async function
     async def start_server():
-        server = await websockets.serve(ws_handler, host, port, loop=loop)
+        server = await websockets.serve(ws_handler, host, port)
         print(f"[WebSocketLogHandler] Running on ws://{host}:{port}/")
         return server
 
@@ -158,8 +327,18 @@ default_log_level = logging.INFO  # Default log level if not specified
 class LoggerWrapper:
     def __init__(self):
         self._loggers: dict[str, logging.Logger] = {}
+        # Set the global functions to access logger data
+        global _get_logger_names, _set_logger_level
+        _get_logger_names = self.get_logger_names
+        _set_logger_level = self.set_logger_level
         # Kick off the WebSocket server thread on first use:
         _ensure_ws_thread_started()
+    
+    def get_logger_names(self) -> list[str]:
+        """
+        Returns a list of all logger names currently managed by this wrapper.
+        """
+        return list(self._loggers.keys())
 
     def get_logger(
         self,
@@ -205,6 +384,33 @@ class LoggerWrapper:
         return ElapsedTimeFormatter(
             fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
         )
+
+    def set_logger_level(self, logger_name: str, level: str) -> None:
+        """
+        Set the logging level for a specific logger.
+        
+        Args:
+            logger_name: The name of the logger to modify
+            level: Level name ('DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL')
+        
+        Raises:
+            ValueError: If logger_name doesn't exist or level is invalid
+        """
+        if logger_name not in self._loggers:
+            raise ValueError(f"Logger '{logger_name}' does not exist")
+            
+        level_map = {
+            'DEBUG': logging.DEBUG,
+            'INFO': logging.INFO,
+            'WARNING': logging.WARNING,
+            'ERROR': logging.ERROR,
+            'CRITICAL': logging.CRITICAL
+        }
+        
+        if level not in level_map:
+            raise ValueError(f"Invalid log level: {level}")
+            
+        self._loggers[logger_name].setLevel(level_map[level])
 
 
 # Singleton instance of LoggerWrapper
