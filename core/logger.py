@@ -350,8 +350,8 @@ class LoggerWrapper:
         _set_logger_level = self.set_logger_level
         # Kick off the WebSocket server thread on first use:
         _ensure_ws_thread_started()
-        # Configure root logger to DEBUG
-        logging.basicConfig(level=logging.DEBUG)
+        # Configure root logger to WARNING to reduce noise from external libraries
+        logging.basicConfig(level=logging.WARNING)  # Changed from DEBUG to WARNING
     
     def get_logger_names(self) -> list[str]:
         """
