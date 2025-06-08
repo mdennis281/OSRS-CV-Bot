@@ -86,11 +86,19 @@ class ScriptControl(metaclass=SingletonMeta):
         def wrapper(*args, **kwargs):
             while time.time() < self.break_until or self.pause:
                 if self.terminate:
-                    raise RuntimeError("Script terminated.")
+                    raise ScriptTerminationException()
                 time.sleep(1)
             if self.terminate:
-                raise RuntimeError("Script terminated.")
+                raise ScriptTerminationException()
             return func(*args, **kwargs)
         return wrapper
 
 
+class ScriptTerminationException(Exception):
+    """Exception raised when script termination is requested."""
+    def __init__(self, message="Script termination requested."):
+        self.message = message
+        super().__init__(self.message)
+        
+    def __str__(self):
+        return self.message
