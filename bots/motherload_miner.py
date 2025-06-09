@@ -218,6 +218,7 @@ class BotExecutor(Bot):
         
         fail_count = 0
         while not self.is_inventory_full():
+            self.control.propose_break()
             # Check if the hopper is full
             if self.hopper_count >= 108:
                 self.log.warning("Hopper is full (108/108). Cannot mine until emptied.")
@@ -416,19 +417,18 @@ class BotExecutor(Bot):
                 continue
             
             # Wait for bank to open
-            for _ in range(6):
+            for _ in range(10):
                 if self.control.terminate: 
                     return False
                     
-                time.sleep(random.uniform(2, 3))
                 try:
                     deposit = self.client.find_in_window(
                         Image.open('data/ui/bank-deposit-inv.png'), 
-                        min_confidence=0.7
+                        min_confidence=0.9
                     )
                     exit = self.client.find_in_window(
                         Image.open('data/ui/close-ui-element.png'), 
-                        min_confidence=0.7
+                        min_confidence=0.9
                     )
                 except Exception as e:
                     self.log.error(f"{e}")
