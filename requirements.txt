@@ -7,3 +7,5 @@ pytesseract
 keyboard
 requests
 websockets
+flask
+flask-cors
