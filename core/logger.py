@@ -144,7 +144,6 @@ class WebSocketLogHandler(logging.Handler):
         that is subscribed to this logger.
         """
         global client_subscriptions
-        print(f"Broadcasting to {len(_ws_clients)} clients, subscriptions: {client_subscriptions}")
         
         to_remove = []
         for ws in _ws_clients:
