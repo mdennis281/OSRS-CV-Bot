@@ -1,4 +1,4 @@
-from bots.woodcutter import BotConfig, BotExecutor
+from bots.motherload_miner import BotConfig, BotExecutor
 
 
 def main():
