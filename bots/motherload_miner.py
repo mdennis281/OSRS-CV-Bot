@@ -88,8 +88,8 @@ class BotExecutor(Bot):
             # Main mining loop
             while not self.terminate:
                 # Check if hopper is full or nearly full
-                if self.hopper_count >= 100:
-                    self.log.info(f"Hopper is nearly full ({self.hopper_count}/108), going down to empty sack")
+                if self.hopper_count >= self.cfg.sack_size.value:
+                    self.log.info(f"Hopper is nearly full ({self.hopper_count}/{self.cfg.sack_size.value}), going down to empty sack")
                     if not self.climb_down_ladder():
                         self.log.error("Failed to climb down ladder. Retrying...")
                         continue
