@@ -42,6 +42,8 @@ class BotConfig(BotConfigMixin):
     vein_tile_2: RGBParam = RGBParam(255, 0, 40)
     vein_tile_3: RGBParam = RGBParam(255, 0, 80)
     vein_tile_4: RGBParam = RGBParam(255, 0, 120)
+
+    sack_size: IntParam = IntParam(189) #IntParam(108)  # Maximum pay-dirt in hopper
     
     # Other action tiles
     hopper_tile: RGBParam = RGBParam(255, 0, 255)
@@ -69,6 +71,7 @@ class BotExecutor(Bot):
         self.upstairs = None  # Track if we're upstairs or downstairs
         self.hopper_count = 0  # Track how much paydirt is in the hopper
         self.terminate = False  # Flag to control script termination
+        self.loop_cnt = int(config.sack_size.value / 27)  # Number of times to loop through mining and banking
         
     def start(self):
         self.log.info("Starting Motherload Miner Bot")
@@ -99,9 +102,9 @@ class BotExecutor(Bot):
                         self.log.warning("Failed to climb up ladder. Trying to recover...")
                         continue
                 
-                # Mine and deposit cycle (repeat 4 times)
-                for cycle in range(4):
-                    self.log.info(f"Starting mining cycle {cycle+1}/4")
+                # Mine and deposit cycle (repeat X times)
+                for cycle in range(self.loop_cnt):
+                    self.log.info(f"Starting mining cycle {cycle+1}/{self.loop_cnt}")
                     if not self.mine_until_full():
                         self.log.warning("Failed to complete mining cycle. Trying to recover...")
                         if not self.detect_location() or not self.upstairs:
@@ -121,9 +124,9 @@ class BotExecutor(Bot):
                         self.log.error("Unable to proceed to banking area. Restarting...")
                         continue
                 
-                # Search sack, bank, climb up - repeat 4 times
-                for cycle in range(4):
-                    self.log.info(f"Starting banking cycle {cycle+1}/4")
+                # Search sack, bank, climb up - repeat X times
+                for cycle in range(self.loop_cnt):
+                    self.log.info(f"Starting banking cycle {cycle+1}/{self.loop_cnt}")
                     if not self.search_sack():
                         raise RuntimeError("Failed to search sack for processed ore")
                     
