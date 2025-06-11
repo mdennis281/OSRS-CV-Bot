@@ -87,20 +87,6 @@ class BotExecutor(Bot):
             
             # Main mining loop
             while not self.terminate:
-                # Check if hopper is full or nearly full
-                if self.hopper_count >= self.cfg.sack_size.value:
-                    self.log.info(f"Hopper is nearly full ({self.hopper_count}/{self.cfg.sack_size.value}), going down to empty sack")
-                    if not self.climb_down_ladder():
-                        self.log.error("Failed to climb down ladder. Retrying...")
-                        continue
-                        
-                    if not self.search_sack():
-                        self.log.warning("Failed to search sack. Trying to recover...")
-                        continue
-                        
-                    if not self.climb_up_ladder():
-                        self.log.warning("Failed to climb up ladder. Trying to recover...")
-                        continue
                 
                 # Mine and deposit cycle (repeat X times)
                 for cycle in range(self.loop_cnt):
@@ -117,7 +103,7 @@ class BotExecutor(Bot):
                             self.log.error("Unable to deposit pay-dirt. Restarting mining cycle.")
                             break
                 
-                # After 4 cycles, go down to collect and bank
+                # After X cycles, go down to collect and bank
                 if not self.climb_down_ladder():
                     self.log.error("Failed to climb down ladder. Retrying...")
                     if not self.detect_location() or self.upstairs:
