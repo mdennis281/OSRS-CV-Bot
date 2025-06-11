@@ -209,8 +209,8 @@ class BotExecutor(Bot):
         while not self.is_inventory_full():
             self.control.propose_break()
             # Check if the hopper is full
-            if self.hopper_count >= 108:
-                self.log.warning("Hopper is full (108/108). Cannot mine until emptied.")
+            if self.hopper_count >= self.cfg.sack_size.value:
+                self.log.warning(f"Hopper is full ({self.hopper_count}/{self.cfg.sack_size.value}). Cannot mine until emptied.")
                 return False
                 
             # Check for and drop any gems
