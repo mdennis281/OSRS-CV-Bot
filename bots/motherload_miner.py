@@ -296,8 +296,8 @@ class BotExecutor(Bot):
             count = len(pay_dirt)
             
             # Check if depositing would exceed hopper capacity
-            if self.hopper_count + count > 108:
-                self.log.warning(f"Hopper nearly full ({self.hopper_count}/108). Depositing would exceed capacity.")
+            if self.hopper_count + count > self.cfg.sack_size.value:
+                self.log.warning(f"Hopper nearly full ({self.hopper_count}/{self.cfg.sack_size.value}). Depositing would exceed capacity.")
                 return False
             
             # Click on the hopper
@@ -316,7 +316,7 @@ class BotExecutor(Bot):
             
             # Update hopper count
             self.hopper_count += count
-            self.log.info(f"Deposited {count} pay-dirt. Hopper now at {self.hopper_count}/108")
+            self.log.info(f"Deposited {count} pay-dirt. Hopper now at {self.hopper_count}/{self.cfg.sack_size.value}")
             
             return True
         except Exception as e:
@@ -377,7 +377,7 @@ class BotExecutor(Bot):
             
             # Reset hopper count since we've emptied the sack
             self.hopper_count = 0
-            self.log.info("Emptied sack. Hopper count reset to 0/108")
+            self.log.info(f"Emptied sack. Hopper count reset to 0/{self.cfg.sack_size.value}")
             
             return True
         except Exception as e:
