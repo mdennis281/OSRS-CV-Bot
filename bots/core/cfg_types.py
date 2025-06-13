@@ -122,6 +122,23 @@ class RGBParam:
     def __repr__(self):
         return f"RGBValue({self._r}, {self._g}, {self._b})"
     
+class RGBListParam:
+    def __init__(self, value: List[RGBParam]):
+        self.value = value
+
+    @staticmethod
+    def type() -> str:
+        return "RGBList"
+    
+    @staticmethod
+    def load(value: List[List[int]]) -> 'RGBListParam':
+        if not isinstance(value, list) or not all(isinstance(v, list) and len(v) == 3 for v in value):
+            raise ValueError("RGBList value must be a list of RGB lists.")
+        return RGBListParam([RGBParam.load(v) for v in value])
+
+    def __repr__(self):
+        return f"RGBListValue({self.value})"
+    
 class RangeParam:
     def __init__(self, min_value: float, max_value: float):
         self.min_value = min_value
@@ -184,10 +201,12 @@ class WaypointParam:
     Represents a waypoint with x, y, and optional z coordinates.
     Tolerance is the allowed deviation from the exact coordinates.
     """
-    def __init__(self, x: int, y: int, z: int = 0, tolerance: int = 5):
+    
+    def __init__(self, x: int, y: int, z: int, chunk: int, tolerance: int = 5):
         self.x = x
         self.y = y
         self.z = z
+        self.chunk = chunk
         self.tolerance = tolerance
 
     @staticmethod
@@ -196,39 +215,60 @@ class WaypointParam:
 
     @property
     def value(self):
-        return [(self.x, self.y, self.z), self.tolerance]
+        return [(self.x, self.y, self.z), self.chunk, self.tolerance]
+    
+    def gen_tile(self, color:RGBParam) -> dict:
+        # [{"regionId":12853,"regionX":58,"regionY":36,"z":0,"color":"#FF00FFFF"}]
+        def _rgb_to_hex(rgb: Tuple[int, int, int]) -> str:
+            return "#{:02X}{:02X}{:02X}".format(*rgb)
+        return {
+            "regionId": self.chunk,
+            "regionX": self.x,
+            "regionY": self.y,
+            "z": self.z,
+            "color": _rgb_to_hex(color.value)
+        }
+    
+    
+
     
     @staticmethod
     def load(value: list) -> 'WaypointParam':
         """
         Parses a waypoint value and returns a WaypointParam instance.
         Supported formats:
-        - [[x, y, z], tolerance]
-        - [x, y]
-        - [x, y, z]
-        - [[x, y], tolerance]
+        - [[x, y, z], chunk, tolerance]
+        - [x, y, z, chunk]
+        - [[x, y, z], chunk]
         """
         # Default tolerance
         tolerance = 5
-
-        # Handle format [[x, y, z], tolerance] or [[x, y], tolerance]
+        
+        # Handle format [[x, y, z], chunk, tolerance] or [[x, y, z], chunk]
         if isinstance(value[0], list):
-            if len(value) == 2:
-                tolerance = value[1]
-            value = value[0]
-
-        # Validate the length of the value list
-        if len(value) not in (2, 3):
-            raise ValueError("Waypoint value must be a list of two or three integers.")
-
-        # Extract coordinates and set default z if not provided
-        x, y = value[0], value[1]
-        z = value[2] if len(value) == 3 else 0
-
-        return WaypointParam(x, y, z, tolerance)
+            coords = value[0]
+            if len(coords) != 3:
+                raise ValueError("Waypoint coordinates must include x, y, and z values.")
+            
+            if len(value) < 2:
+                raise ValueError("Waypoint must include chunk value.")
+            
+            chunk = value[1]
+            if len(value) > 2:
+                tolerance = value[2]
+            
+            return WaypointParam(coords[0], coords[1], coords[2], chunk, tolerance)
+        
+        # Handle format [x, y, z, chunk]
+        elif len(value) == 4:
+            x, y, z, chunk = value
+            return WaypointParam(x, y, z, chunk, tolerance)
+        
+        else:
+            raise ValueError("Invalid waypoint format. Must provide x, y, z, and chunk values.")
 
     def __repr__(self):
-        return f"WaypointValue({self._x}, {self._y}, {self._z})"
+        return f"WaypointValue({self.x}, {self.y}, {self.z})"
     
 class RouteParam:
     def __init__(self, waypoints: List[WaypointParam]):
@@ -241,6 +281,10 @@ class RouteParam:
     @property
     def value(self) -> List[List[int]]:
         return [wp.value for wp in self.waypoints]
+    
+    def reverse(self) -> 'RouteParam':
+        """Returns a new RouteParam with waypoints in reverse order."""
+        return RouteParam(self.waypoints[::-1])
 
     @staticmethod
     def load(value: List[List[int]]) -> 'RouteParam':
@@ -251,4 +295,4 @@ class RouteParam:
         return f"RouteValue({self.waypoints})"
     
 
-TYPES = [BooleanParam, StringParam, IntParam, FloatParam, RGBParam, WaypointParam, RouteParam, StringListParam]
+TYPES = [BooleanParam, StringParam, IntParam, FloatParam, RGBParam, WaypointParam, RouteParam, StringListParam, RGBListParam]
