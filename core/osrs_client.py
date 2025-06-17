@@ -936,7 +936,7 @@ class RuneLiteClient(GenericWindow):
             if filter_out:
                 for match in filter_out:
                     sc = match.remove_from(sc)
-            if mult + 1 >= retry_match:
+            if mult + 1 >= retry_match and retry_match > 1:
                 self.move_off_window()
             match = find_color_box(
                 sc,tile_color,
@@ -987,10 +987,10 @@ class RuneLiteClient(GenericWindow):
             List[str]: A list containing hover text and action hover text.
         """
         def fetch_hover_text():
-            return self.get_hover_text()
+            return self.get_hover_text() or ''
 
         def fetch_action_hover():
-            return self.get_action_hover()
+            return self.get_action_hover() or ''
 
         with ThreadPoolExecutor(max_workers=2) as executor:
             futures = [
@@ -1401,6 +1401,7 @@ class MinimapContext:
     prayer: MatchResult = None
     run: MatchResult = None
     spec: MatchResult = None
+    globe: MatchResult = None
     MATCH_SCALE = -4 #px
 
     def get_minimap_value_match(self,match: MatchResult) -> MatchResult:
@@ -1437,6 +1438,7 @@ class MinimapContext:
                 match.start_y = m.start_y
                 match.end_x = m.end_x
                 m.end_y = m.end_y
+        self.globe = map # blue globe thing
                 
                 
 
