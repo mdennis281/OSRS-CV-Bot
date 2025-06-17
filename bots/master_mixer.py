@@ -59,13 +59,15 @@ class BotExecutor(Bot):
     
     def start(self):
         #self.fill_ingredients()
-        self.loop()
+        unf_pots = self.mixer.inv_unfinished_potions()
+        pots = self.mixer.inv_finished_potions()
+        print(f'Unfinished pots: {unf_pots},\n Finished pots: {pots}')
+        #self.loop()
         
     
     def loop(self):
         while True:
             orders = self.mixer.get_orders()
-           
             try:
                 for order in orders:
                     self.log.info(f"Filling vial: {order.ingredients}")
