@@ -57,7 +57,12 @@ def execute(
         config += f' -c tessedit_char_whitelist={characters}'
 
     
-    ans = pytesseract.image_to_string(img, lang=lang, config=config).strip()
+    ans = pytesseract.image_to_string(
+        img, 
+        lang=lang, 
+        config=config,
+        timeout=5
+    ).strip()
     if not ans and raise_on_blank:
         print(f"lang: {lang}, config: {config}")
         img.show()
@@ -84,7 +89,12 @@ def find_string_bounds(
         img = _preprocess(img)
 
     cfg = f"--psm {psm}"
-    data = pytesseract.image_to_data(img, lang=lang, config=cfg, output_type=pytesseract.Output.DICT)
+    data = pytesseract.image_to_data(
+        img, lang=lang, 
+        config=cfg, 
+        output_type=pytesseract.Output.DICT, 
+        timeout=5
+        )
 
     # Group words by line
     n = len(data["text"])
