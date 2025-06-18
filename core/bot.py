@@ -14,7 +14,10 @@ class Bot:
         self.itemdb = ItemLookup()
         self.bank = BankInterface(self.client, self.itemdb)
         self.mover = MovementOrchestrator(self.client)
-        self.control = ScriptControl(break_cfg)
+        self.control = ScriptControl()
+
+        if break_cfg:
+            self.control.break_config = break_cfg
         
         self.api = BotAPI(self.client)
         self.api.start(port=5432)

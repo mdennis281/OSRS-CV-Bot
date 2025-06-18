@@ -32,12 +32,15 @@ class ScriptControl(metaclass=SingletonMeta):
 
     def propose_break(self):
         """Propose break based on configuration."""
-        if self.break_config and self.break_config.should_break():
-            sec = int(self.break_config.break_duration.choose())
-            self.initialize_break(
-                sec
-            )
-            self.log.info(f"Sleeping for {sec} seconds.")
+        if self.break_config:
+            if self.break_config.should_break():
+                sec = int(self.break_config.break_duration.choose())
+                self.initialize_break(
+                    sec
+                )
+                self.log.info(f"Sleeping for {sec} seconds.")
+        else:
+            self.log.warning("Break proposed but no break configuration set.")
     def _listen_for_control(self):
         """Thread function to listen for control signals."""
         import keyboard
