@@ -1,4 +1,4 @@
-from bots.motherload_miner import BotConfig, BotExecutor
+from bots.master_mixer import BotConfig, BotExecutor
 
 
 def main():
