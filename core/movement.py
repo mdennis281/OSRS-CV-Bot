@@ -156,6 +156,7 @@ class MovementOrchestrator:
         Pushes a list of tiles to the clipboard as JSON in the format:
         [{"regionId":11826,"regionX":8,"regionY":24,"z":0,"color":"#FFFF37FF"}]
         """
+        return 
         ground_markers = []
         for tile in tiles:
             ground_markers.append(tile.get_json())
@@ -171,6 +172,7 @@ class MovementOrchestrator:
         [{"regionId":11826,"regionX":8,"regionY":24,"z":0,"color":"#FFFF37FF"}]
         and returns as list of TileValue objects.
         """
+        return
         def hex_to_rgb(hex_color):
             """Convert hex color string to RGB tuple."""
             # Remove the # prefix if present
