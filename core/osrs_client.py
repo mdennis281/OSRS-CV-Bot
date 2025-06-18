@@ -981,6 +981,12 @@ class RuneLiteClient(GenericWindow):
         raise RuntimeError(f'[SmartClick] cant find match {hover_texts}. Hover text: "{ans}"')
 
     def get_hover_texts(self):
+        if sys.platform.startswith('linux'):
+            # TODO linux bullshit
+            return [self.get_action_hover() or '']
+        
+
+        
         def safe(fn, label):
             try:
                 return fn() or ''
