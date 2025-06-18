@@ -177,21 +177,14 @@ class GenericWindow:
             MatchShape.RECT
         )
 
+    @control.guard
     def bring_to_focus(self):
         """
-        Brings the RuneLite window to the foreground.
+        Brings the RuneLite window to the foreground using platform-specific window manager.
         """
-        if self.is_open and not self.window.isActive:
-            try:
-                # Pressing alt makes activate() more reliable
-                keyboard.press('alt')
-                self.window.activate()
-            except:
-                self.window.minimize()
-                self.window.restore()
-                time.sleep(0.3)
-            finally:
-                keyboard.release('alt')
+        if self.is_open:
+            # Use the platform-specific implementation from the window manager
+            self.window.bring_to_focus()
 
     def move_off_window(self, offset=45):
         """

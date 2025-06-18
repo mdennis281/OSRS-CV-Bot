@@ -5,6 +5,8 @@ Provides window manipulation functionality across Windows, macOS, and Linux.
 
 import sys
 import pyautogui
+import time
+import keyboard
 
 # Platform detection
 IS_WINDOWS = sys.platform.startswith('win')
@@ -68,6 +70,14 @@ class BasicWindow:
         """Activate the window (no-op in basic implementation)"""
         pass
     
+    def bring_to_focus(self):
+        """Bring window to foreground (basic implementation)"""
+        try:
+            # Minimal implementation - just call activate
+            self.activate()
+        except Exception as e:
+            print(f"Error bringing window to focus: {e}")
+    
     def minimize(self):
         """Minimize the window (no-op in basic implementation)"""
         pass
@@ -85,7 +95,49 @@ class WindowsWindowManager:
     
     def get_windows_with_title(self, title):
         """Get windows with the given title using pygetwindow"""
-        return self.gw.getWindowsWithTitle(title)
+        windows = self.gw.getWindowsWithTitle(title)
+        return [WindowsWindow(window) for window in windows]
+
+class WindowsWindow:
+    """Windows window wrapper to ensure consistent interface"""
+    
+    def __init__(self, win32_window):
+        # Copy all attributes from the original window
+        self.win32_window = win32_window
+        self.title = win32_window.title
+        self.left = win32_window.left
+        self.top = win32_window.top
+        self.width = win32_window.width
+        self.height = win32_window.height
+        self.right = win32_window.right
+        self.bottom = win32_window.bottom
+        self.isActive = win32_window.isActive
+    
+    def activate(self):
+        """Activate the window"""
+        self.win32_window.activate()
+    
+    def bring_to_focus(self):
+        """Bring window to foreground on Windows"""
+        # Pressing alt makes activate() more reliable on Windows
+        try:
+            # Pressing alt makes activate() more reliable
+            keyboard.press('alt')
+            self.win32_window.activate()
+        except:
+            self.win32_window.minimize()
+            self.win32_window.restore()
+            time.sleep(0.3)
+        finally:
+            keyboard.release('alt')
+    
+    def minimize(self):
+        """Minimize the window"""
+        self.win32_window.minimize()
+    
+    def restore(self):
+        """Restore the window"""
+        self.win32_window.restore()
 
 class MacWindowManager:
     """macOS-specific window management using AppKit"""
@@ -125,6 +177,27 @@ class MacWindow:
     def activate(self):
         """Activate the window"""
         self.app.activateWithOptions_(0)
+    
+    def bring_to_focus(self):
+        """Bring window to foreground on macOS"""
+        try:
+            # Press Command key to help with activation
+            if keyboard:
+                try:
+                    keyboard.press('command')
+                    self.activate()
+                    time.sleep(0.1)
+                finally:
+                    keyboard.release('command')
+            else:
+                # Fallback if keyboard module isn't available
+                self.activate()
+                
+            # Additional activation attempt if needed
+            if not self.isActive:
+                self.app.activateWithOptions_(1)  # 1 = Activate and bring to front
+        except Exception as e:
+            print(f"Error focusing macOS window: {e}")
     
     def minimize(self):
         """Minimize the window (best effort)"""
@@ -213,6 +286,33 @@ class LinuxWindow:
             self.display.sync()
         except:
             pass
+    
+    def bring_to_focus(self):
+        """Bring window to foreground on Linux"""
+        try:
+            # Press Alt to help with activation on Linux
+            if keyboard:
+                try:
+                    keyboard.press('alt')
+                    self.activate()
+                    time.sleep(0.1)
+                finally:
+                    keyboard.release('alt')
+            else:
+                # Multiple activation attempts for Linux
+                self.activate()
+                time.sleep(0.1)
+                self.window.map()  # Make sure window is mapped
+                self.window.raise_window()  # Raise window to top
+                self.display.sync()
+                
+            # If still not active, try minimizing and restoring
+            if not self._is_active():
+                self.minimize()
+                time.sleep(0.3)
+                self.restore()
+        except Exception as e:
+            print(f"Error focusing Linux window: {e}")
     
     def minimize(self):
         """Minimize the window"""
