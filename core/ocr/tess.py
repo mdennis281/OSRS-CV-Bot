@@ -4,12 +4,18 @@ import cv2
 import numpy as np
 import os
 import sys
+import shutil
 import re
 from typing import List, Tuple, Optional, Dict
 from difflib import SequenceMatcher
 from core.ocr.enums import TessOem, TessPsm, FontChoice
 
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+# Set Tesseract command path per OS
+if sys.platform.startswith('win'):
+    pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+else:
+    # On Linux/macOS assume 'tesseract' is in PATH or default install dir
+    pytesseract.pytesseract.tesseract_cmd = shutil.which('tesseract') or 'tesseract'
 
 os.environ['TESSDATA_PREFIX'] = os.path.abspath('./data/fonts')
 
