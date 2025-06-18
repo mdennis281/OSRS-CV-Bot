@@ -639,7 +639,7 @@ class RuneLiteClient(GenericWindow):
     def get_hover_image(self) -> Image.Image:
         logo = Image.open('data/ui/rl-window-logo.png')
         match = self.find_in_window(
-            logo,min_scale=1,max_scale=1
+            logo,min_scale=1,max_scale=1,min_confidence=0.95
         )
         match = match.transform(0,25)
         match.end_x = match.start_x + 350
@@ -987,10 +987,18 @@ class RuneLiteClient(GenericWindow):
             List[str]: A list containing hover text and action hover text.
         """
         def fetch_hover_text():
-            return self.get_hover_text() or ''
+            try:
+                return self.get_hover_text()
+            except Exception as e:
+                self.log.error(f"[hover_text] unable to get text: {e}")
+                return ''
 
         def fetch_action_hover():
-            return self.get_action_hover() or ''
+            try:
+                return self.get_action_hover()
+            except Exception as e:
+                self.log.error(f"[action_hover] unable to get text: {e}")
+                return ''
 
         with ThreadPoolExecutor(max_workers=2) as executor:
             futures = [
@@ -1004,7 +1012,8 @@ class RuneLiteClient(GenericWindow):
                 except Exception as e:
                     print(f"[hover_text] Error from future: {e}")
                     results.append('')
-            return results
+            executor.shutdown(wait=False)
+        return results
 
     def compare_hover_match(self, target: str) -> float:
         """
