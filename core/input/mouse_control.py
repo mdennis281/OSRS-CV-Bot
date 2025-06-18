@@ -27,7 +27,7 @@ class ClickType(Enum):
     MIDDLE = 3
 
 # ── global knobs ───────────────────────────────────────────
-user32              = ctypes.windll.user32
+#user32              = ctypes.windll.user32
 terminate           = False          # Esc listener toggles this
 movement_multiplier = 0.45           # lower = faster (was 0.5)
 is_simulation = False
@@ -40,7 +40,7 @@ def _bezier(p0,p1,p2,t):
             _lerp(_lerp(p0[1],p1[1],t), _lerp(p1[1],p2[1],t), t))
 def _smooth_steps(total, n):
     return [total*(3*(i/n)**2 - 2*(i/n)**3) for i in range(1,n+1)]
-def _block(on=True):       user32.BlockInput(bool(on))
+def _block(on=True):  pass     #user32.BlockInput(bool(on))
 
 def _get_direction(p1: Tuple[int, int],
                   p2: Tuple[int, int]):
