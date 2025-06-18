@@ -996,7 +996,7 @@ class RuneLiteClient(GenericWindow):
                 executor.submit(fetch_hover_text),
                 executor.submit(fetch_action_hover)
             ]
-            return [future.result() for future in as_completed(futures)]
+            return [future.result() for future in as_completed(futures, timeout=5)]
 
     def compare_hover_match(self, target: str) -> float:
         """
