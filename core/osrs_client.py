@@ -19,7 +19,8 @@ import random
 from pathlib import Path
 import keyboard
 from dataclasses import dataclass
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, wait, FIRST_EXCEPTION, TimeoutError, as_completed
+
 from core import tools
 from core.control import ScriptControl
 import os
@@ -979,41 +980,41 @@ class RuneLiteClient(GenericWindow):
                         return
         raise RuntimeError(f'[SmartClick] cant find match {hover_texts}. Hover text: "{ans}"')
 
-    def get_hover_texts(self) -> List[str]:
-        """
-        Retrieves hover texts from both the hover text and action hover areas in parallel.
-
-        Returns:
-            List[str]: A list containing hover text and action hover text.
-        """
-        def fetch_hover_text():
+    def get_hover_texts(self):
+        def safe(fn, label):
             try:
-                return self.get_hover_text()
+                return fn() or ''
             except Exception as e:
-                self.log.error(f"[hover_text] unable to get text: {e}")
+                self.log.error("[%s] %s", label, e, exc_info=True)
                 return ''
 
-        def fetch_action_hover():
-            try:
-                return self.get_action_hover()
-            except Exception as e:
-                self.log.error(f"[action_hover] unable to get text: {e}")
-                return ''
+        ex = ThreadPoolExecutor(max_workers=2, thread_name_prefix="hover")
+        futures = [
+            ex.submit(safe, self.get_hover_text,     "hover_text"),
+            ex.submit(safe, self.get_action_hover,   "action_hover"),
+        ]
+        try:
+            done, not_done = wait(futures, timeout=5, return_when=FIRST_EXCEPTION)
 
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            futures = [
-                executor.submit(fetch_hover_text),
-                executor.submit(fetch_action_hover)
-            ]
-            results = []
-            for future in as_completed(futures, timeout=5):
-                try:
-                    results.append(future.result(timeout=3))  # optional nested timeout
-                except Exception as e:
-                    print(f"[hover_text] Error from future: {e}")
-                    results.append('')
-            executor.shutdown(wait=False)
-        return results
+            # collect whatever finished
+            results = [f.result() for f in done]
+
+            # anything still running after 5 s is probably wedged
+            for f in not_done:
+                f.cancel()
+
+            # pad so we always return two strings
+            while len(results) < 2:
+                results.append('')
+            return results
+
+        except TimeoutError:
+            self.log.warning("Timed-out waiting for hover text")
+            return ['', '']
+
+        finally:
+            # don’t block—just shoot lingering threads
+            ex.shutdown(wait=False, cancel_futures=True)
 
     def compare_hover_match(self, target: str) -> float:
         """
