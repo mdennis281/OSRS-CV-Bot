@@ -128,7 +128,10 @@ class MovementOrchestrator:
         
 
     def set_minimap_zoom(self, zoom_level: int = 2):
-        x,y = self.minimap.get_point_within()
+        self.log.debug(f"Setting minimap zoom level to {zoom_level} was {self._zoom_level}")
+        x,y = self.minimap.get_center()
+        x += random.randint(-10, 10)
+        y += random.randint(-10, 10)
         self.client.move_to((x,y))
         def do_zoom(i):
             amount = -(i * 600)
