@@ -313,63 +313,86 @@ class LinuxWindow:
         try:
             print(f"Attempting to focus Linux window: {self.title}")
             
-            # 1. First try using _NET_ACTIVE_WINDOW protocol (most window managers)
-            net_active_window = self.display.intern_atom('_NET_ACTIVE_WINDOW')
+            # Try multiple methods to ensure window focus
             
-            data = [
-                2,  # Source indication (2 = pager/window manager)
-                int(time.time() * 1000),  # Timestamp
-                0   # Currently active window (0 = none)
-            ]
+            # Method 1: Direct focus
+            try:
+                self.window.set_input_focus(self.Xlib.X.RevertToParent, 0)  # Use 0 instead of timestamp
+                self.window.configure(stack_mode=self.Xlib.X.Above)
+                self.display.flush()
+                self.display.sync()
+                print("Direct focus attempt completed")
+            except Exception as e:
+                print(f"Direct focus failed: {e}")
             
-            event_mask = (self.Xlib.X.SubstructureRedirectMask | 
-                          self.Xlib.X.SubstructureNotifyMask)
+            # Method 2: _NET_ACTIVE_WINDOW (EWMH)
+            try:
+                net_active_window = self.display.intern_atom('_NET_ACTIVE_WINDOW')
+                
+                # Use X server's current timestamp (0 = let server fill in)
+                data = [
+                    1,  # Source indication (1 = application)
+                    0,  # Timestamp (0 = let server decide)
+                    0   # Currently active window (0 = none)
+                ]
+                
+                event_mask = (self.Xlib.X.SubstructureRedirectMask | 
+                            self.Xlib.X.SubstructureNotifyMask)
+                
+                event = self.Xlib.protocol.event.ClientMessage(
+                    window=self.window,
+                    client_type=net_active_window,
+                    data=(32, data + [0, 0])  # 32-bit format, with padding
+                )
+                
+                # Send the event to the root window
+                self.display.screen().root.send_event(
+                    event,
+                    event_mask=event_mask
+                )
+                self.display.flush()
+                self.display.sync()
+                print("EWMH focus attempt completed")
+            except Exception as e:
+                print(f"EWMH focus failed: {e}")
             
-            event = self.Xlib.protocol.event.ClientMessage(
-                window=self.window,
-                client_type=net_active_window,
-                data=(32, data + [0, 0])  # 32-bit format, with padding
-            )
+            # Method 3: Map and raise window
+            try:
+                self.window.map()
+                self.window.raise_window()
+                self.display.flush()
+                self.display.sync()
+                print("Map and raise focus attempt completed")
+            except Exception as e:
+                print(f"Map and raise failed: {e}")
             
-            # Send the event to the root window
-            self.display.screen().root.send_event(
-                event,
-                event_mask=event_mask
-            )
-            
-            # 2. Also try more direct methods
-            self.window.set_input_focus(self.Xlib.X.RevertToParent, int(time.time()))
-            self.window.configure(stack_mode=self.Xlib.X.Above)
-            
-            # 3. Try to map and raise window explicitly
-            self.window.map()
-            self.window.raise_window()
-            
-            # Ensure changes are applied
-            self.display.flush()
-            self.display.sync()
-            
-            # 4. If keyboard library is available, try that too
+            # Method 4: Use keyboard if available
             if keyboard:
                 try:
                     keyboard.press('alt')
                     time.sleep(0.1)
                     self.activate()
                     time.sleep(0.1)
-                finally:
                     keyboard.release('alt')
+                    print("Keyboard focus attempt completed")
+                except Exception as e:
+                    print(f"Keyboard focus failed: {e}")
             
-            # 5. Wait a moment and check if window is active
+            # Method 5: Minimize/restore if not active
             time.sleep(0.2)
             if not self._is_active():
-                print("First focus attempt failed, trying minimize/restore...")
-                self.minimize()
-                time.sleep(0.5)
-                self.restore()
-                self.display.flush()
-                self.display.sync()
+                print("First focus attempts failed, trying minimize/restore...")
+                try:
+                    self.minimize()
+                    time.sleep(0.5)
+                    self.restore()
+                    self.display.flush()
+                    self.display.sync()
+                    print("Minimize/restore focus attempt completed")
+                except Exception as e:
+                    print(f"Minimize/restore failed: {e}")
             
-            print(f"Window active after focus attempt: {self._is_active()}")
+            print(f"Window active after focus attempts: {self._is_active()}")
             
         except Exception as e:
             print(f"Error focusing Linux window: {str(e)}")
