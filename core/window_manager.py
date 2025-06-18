@@ -7,6 +7,7 @@ import sys
 import pyautogui
 import time
 import keyboard
+import importlib
 
 # Platform detection
 IS_WINDOWS = sys.platform.startswith('win')
@@ -211,13 +212,24 @@ class LinuxWindowManager:
     """Linux-specific window management using Xlib"""
     
     def __init__(self):
-        import Xlib
-        import Xlib.display
-        self.display = Xlib.display.Display()
-        self.root = self.display.screen().root
+        try:
+            import Xlib
+            import Xlib.display
+            self.Xlib = Xlib
+            self.display = Xlib.display.Display()
+            self.root = self.display.screen().root
+        except ImportError:
+            print("Warning: Xlib module not found or couldn't be imported")
+            self.Xlib = None
+            self.display = None
+            self.root = None
     
     def get_windows_with_title(self, title):
         """Get windows with the given title using Xlib"""
+        if not self.Xlib:
+            print("Xlib not available, returning empty window list")
+            return []
+            
         try:
             from Xlib.protocol import event
             NET_CLIENT_LIST = self.display.intern_atom('_NET_CLIENT_LIST')
@@ -232,7 +244,7 @@ class LinuxWindowManager:
                 try:
                     window_title = window.get_wm_name()
                     if window_title and title.lower() in window_title.lower():
-                        windows.append(LinuxWindow(window, window_title, self.display))
+                        windows.append(LinuxWindow(window, window_title, self.display, self.Xlib))
                 except:
                     continue
                     
@@ -244,10 +256,11 @@ class LinuxWindowManager:
 class LinuxWindow:
     """Linux window wrapper to match the pygetwindow interface"""
     
-    def __init__(self, window, title, display):
+    def __init__(self, window, title, display, Xlib):
         self.window = window
         self.title = title
         self.display = display
+        self.Xlib = Xlib  # Store Xlib module reference
         
         # Get geometry
         geom = window.get_geometry()
@@ -280,21 +293,28 @@ class LinuxWindow:
     
     def activate(self):
         """Activate the window"""
+        if not self.Xlib:
+            print("Warning: Xlib not available, can't activate window")
+            return
+            
         try:
             self.window.set_input_focus()
-            self.window.configure(stack_mode=Xlib.X.Above)
+            self.window.configure(stack_mode=self.Xlib.X.Above)
             self.display.sync()
-        except:
-            pass
+        except Exception as e:
+            print(f"Error activating window: {e}")
     
     def bring_to_focus(self):
         """Bring window to foreground on Linux"""
+        if not self.Xlib:
+            print("Warning: Xlib not available, can't focus window")
+            return
+            
         try:
             print(f"Attempting to focus Linux window: {self.title}")
             
             # 1. First try using _NET_ACTIVE_WINDOW protocol (most window managers)
             net_active_window = self.display.intern_atom('_NET_ACTIVE_WINDOW')
-            net_active = self.display.intern_atom('_NET_ACTIVE_WINDOW')
             
             data = [
                 2,  # Source indication (2 = pager/window manager)
@@ -302,10 +322,10 @@ class LinuxWindow:
                 0   # Currently active window (0 = none)
             ]
             
-            event_mask = (Xlib.X.SubstructureRedirectMask | 
-                         Xlib.X.SubstructureNotifyMask)
+            event_mask = (self.Xlib.X.SubstructureRedirectMask | 
+                          self.Xlib.X.SubstructureNotifyMask)
             
-            event = Xlib.protocol.event.ClientMessage(
+            event = self.Xlib.protocol.event.ClientMessage(
                 window=self.window,
                 client_type=net_active_window,
                 data=(32, data + [0, 0])  # 32-bit format, with padding
@@ -318,8 +338,8 @@ class LinuxWindow:
             )
             
             # 2. Also try more direct methods
-            self.window.set_input_focus(Xlib.X.RevertToParent, int(time.time()))
-            self.window.configure(stack_mode=Xlib.X.Above)
+            self.window.set_input_focus(self.Xlib.X.RevertToParent, int(time.time()))
+            self.window.configure(stack_mode=self.Xlib.X.Above)
             
             # 3. Try to map and raise window explicitly
             self.window.map()
@@ -358,18 +378,21 @@ class LinuxWindow:
     
     def minimize(self):
         """Minimize the window"""
+        if not self.Xlib:
+            return
+            
         try:
             WM_CHANGE_STATE = self.display.intern_atom('WM_CHANGE_STATE')
-            iconify_event = Xlib.protocol.event.ClientMessage(
+            iconify_event = self.Xlib.protocol.event.ClientMessage(
                 window=self.window,
                 client_type=WM_CHANGE_STATE,
-                data=(32, [Xlib.Xutil.IconicState, 0, 0, 0, 0])
+                data=(32, [self.Xlib.Xutil.IconicState, 0, 0, 0, 0])
             )
-            mask = Xlib.X.SubstructureRedirectMask | Xlib.X.SubstructureNotifyMask
+            mask = self.Xlib.X.SubstructureRedirectMask | self.Xlib.X.SubstructureNotifyMask
             self.display.screen().root.send_event(iconify_event, mask)
             self.display.sync()
-        except:
-            pass
+        except Exception as e:
+            print(f"Error minimizing window: {e}")
     
     def restore(self):
         """Restore the window"""
