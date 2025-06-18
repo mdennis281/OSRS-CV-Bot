@@ -290,29 +290,71 @@ class LinuxWindow:
     def bring_to_focus(self):
         """Bring window to foreground on Linux"""
         try:
-            # Press Alt to help with activation on Linux
+            print(f"Attempting to focus Linux window: {self.title}")
+            
+            # 1. First try using _NET_ACTIVE_WINDOW protocol (most window managers)
+            net_active_window = self.display.intern_atom('_NET_ACTIVE_WINDOW')
+            net_active = self.display.intern_atom('_NET_ACTIVE_WINDOW')
+            
+            data = [
+                2,  # Source indication (2 = pager/window manager)
+                int(time.time() * 1000),  # Timestamp
+                0   # Currently active window (0 = none)
+            ]
+            
+            event_mask = (Xlib.X.SubstructureRedirectMask | 
+                         Xlib.X.SubstructureNotifyMask)
+            
+            event = Xlib.protocol.event.ClientMessage(
+                window=self.window,
+                client_type=net_active_window,
+                data=(32, data + [0, 0])  # 32-bit format, with padding
+            )
+            
+            # Send the event to the root window
+            self.display.screen().root.send_event(
+                event,
+                event_mask=event_mask
+            )
+            
+            # 2. Also try more direct methods
+            self.window.set_input_focus(Xlib.X.RevertToParent, int(time.time()))
+            self.window.configure(stack_mode=Xlib.X.Above)
+            
+            # 3. Try to map and raise window explicitly
+            self.window.map()
+            self.window.raise_window()
+            
+            # Ensure changes are applied
+            self.display.flush()
+            self.display.sync()
+            
+            # 4. If keyboard library is available, try that too
             if keyboard:
                 try:
                     keyboard.press('alt')
+                    time.sleep(0.1)
                     self.activate()
                     time.sleep(0.1)
                 finally:
                     keyboard.release('alt')
-            else:
-                # Multiple activation attempts for Linux
-                self.activate()
-                time.sleep(0.1)
-                self.window.map()  # Make sure window is mapped
-                self.window.raise_window()  # Raise window to top
-                self.display.sync()
-                
-            # If still not active, try minimizing and restoring
+            
+            # 5. Wait a moment and check if window is active
+            time.sleep(0.2)
             if not self._is_active():
+                print("First focus attempt failed, trying minimize/restore...")
                 self.minimize()
-                time.sleep(0.3)
+                time.sleep(0.5)
                 self.restore()
+                self.display.flush()
+                self.display.sync()
+            
+            print(f"Window active after focus attempt: {self._is_active()}")
+            
         except Exception as e:
-            print(f"Error focusing Linux window: {e}")
+            print(f"Error focusing Linux window: {str(e)}")
+            import traceback
+            traceback.print_exc()
     
     def minimize(self):
         """Minimize the window"""
