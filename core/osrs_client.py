@@ -85,6 +85,7 @@ class GenericWindow:
         windows = self.window_manager.get_windows_with_title(self.window_title)
         if not self.window and windows:
             self.log.debug(f'Window found with title: {windows[0].title}')
+            self.log.debug(f'Window dimensions: {windows[0].width}x{windows[0].height} at ({windows[0].left}, {windows[0].top})')
         self.window = windows[0] if windows else None
         return self.window
 
