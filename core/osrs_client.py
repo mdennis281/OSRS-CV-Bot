@@ -997,7 +997,14 @@ class RuneLiteClient(GenericWindow):
                 executor.submit(fetch_hover_text),
                 executor.submit(fetch_action_hover)
             ]
-            return [future.result() for future in as_completed(futures, timeout=5)]
+            results = []
+            for future in as_completed(futures, timeout=5):
+                try:
+                    results.append(future.result(timeout=3))  # optional nested timeout
+                except Exception as e:
+                    print(f"[hover_text] Error from future: {e}")
+                    results.append('')
+            return results
 
     def compare_hover_match(self, target: str) -> float:
         """
