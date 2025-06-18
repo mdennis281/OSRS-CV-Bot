@@ -251,7 +251,7 @@ class MovementOrchestrator:
         """
         dx, dy = self.get_tile_diff(waypoint)
 
-        scale = math.ceil(max(abs(dx), abs(dy)) / 13)
+        scale = math.ceil(max(abs(dx), abs(dy)) / 8)
         scale = min(scale, 5)  # Limit zoom level to a maximum of 5
         self.set_minimap_zoom(scale)
 
@@ -367,6 +367,13 @@ class MovementOrchestrator:
             dx, dy = self.get_tile_diff(waypoint)
             if abs(dx) <= waypoint.tolerance and abs(dy) <= waypoint.tolerance:
                 self.log.info(f"Reached waypoint ({waypoint.x}, {waypoint.y})")
+                if self.client.is_moving():
+                    # STOP moving
+                    self.client.click(
+                        self.client.minimap.map.get_center(),
+                        rand_move_chance=0
+                    )
+
                 while self.client.is_moving():
                     time.sleep(0.1)
                 dx, dy = self.get_tile_diff(waypoint)

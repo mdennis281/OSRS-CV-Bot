@@ -779,8 +779,9 @@ class RuneLiteClient(GenericWindow):
         def do_ocr(match: MatchResult, sc: Image.Image) -> str:
             return ocr.execute(
                 match.crop_in(sc),
-                font=ocr.FontChoice.RUNESCAPE,
+                font=ocr.FontChoice.AUTO,
                 psm=ocr.TessPsm.SINGLE_LINE,
+                oem= ocr.TessOem.DEFAULT,
                 characters="0123456789,",
                 raise_on_blank=False,
                 preprocess=True
