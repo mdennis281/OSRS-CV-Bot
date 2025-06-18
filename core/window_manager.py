@@ -269,23 +269,16 @@ class LinuxWindow:
         geom = window.get_geometry()
         self.width = geom.width
         self.height = geom.height
-        
-        # Try to get absolute position
+
+        # Correctly unpack translate_coords tuple (x, y, child)
         try:
-            # First attempt with translate_coords
-            root_pos = window.translate_coords(self.display.screen().root, 0, 0)
-            
-            # Check if coordinates seem valid
-            if hasattr(root_pos, 'x') and hasattr(root_pos, 'y'):
-                self.left = root_pos.x
-                self.top = root_pos.y
-            else:
-                # Fallback to alternative positioning
-                self._get_window_position()
-        except:
-            # If translate_coords fails, try alternative method
+            x, y, _ = window.translate_coords(self.root, 0, 0)
+            self.left = x
+            self.top  = y
+        except Exception:
+            # fallback to summing parent offsets
             self._get_window_position()
-            
+
         # Ensure values are in valid range
         screen_size = pyautogui.size()
         self.left = max(0, min(screen_size[0] - 1, self.left))
