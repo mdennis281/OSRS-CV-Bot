@@ -191,7 +191,7 @@ class BreakCfgParam:
     
     def should_break(self) -> bool:
         """Decides whether to take a break based on the configured chance."""
-        return random.random() < self.break_chance.val()
+        return random.random() < self.break_chance.value
     
     def __repr__(self):
         return f"BreakCfgValue({self.break_duration}, {self.break_chance})"
