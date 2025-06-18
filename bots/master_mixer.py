@@ -58,11 +58,8 @@ class BotExecutor(Bot):
         )
     
     def start(self):
-        #self.fill_ingredients()
-        unf_pots = self.mixer.inv_unfinished_potions()
-        pots = self.mixer.inv_finished_potions()
-        print(f'Unfinished pots: {unf_pots},\n Finished pots: {pots}')
-        #self.loop()
+        self.fill_ingredients()
+        self.loop()
         
     
     def loop(self):
@@ -73,6 +70,7 @@ class BotExecutor(Bot):
                     self.log.info(f"Filling vial: {order.ingredients}")
                     self.mixer.fill_potion(order.ingredients)
                     while self.client.is_moving(): continue
+                    order.in_inventory = True
             except MissingIngredientError as e:
                 if not self.fill_ingredients():
                     raise e
@@ -110,11 +108,30 @@ class BotExecutor(Bot):
         
     
     def click_conveyor(self):
-        self.client.smart_click_tile(
+        err_cnt = 0
+        finished_pots = len(self.mixer.inv_finished_potions())
+        while finished_pots:
+            self.client.smart_click_tile(
                 self.cfg.conveyor_tile.value, 
                 ['fufil', 'order', 'conveyor', 'belt']
             )
-        while self.client.is_moving(): continue
+            while self.client.is_moving(): continue
+            tmp = self.mixer.inv_finished_potions()
+            if len(tmp) == finished_pots:
+                self.log.warning(f'Finished pots {finished_pots} did not change, retrying...')
+                err_cnt += 1
+                if err_cnt > 5:
+                    raise RuntimeError('Unable to fufill orders. Too many retries.')
+            elif len(tmp) < finished_pots:
+                self.log.info(f'Finished pots changed from {finished_pots} to {len(tmp)}')
+                finished_pots = len(tmp)
+                err_cnt = 0
+            else:
+                self.log.error(f'Finished pots increased from {finished_pots} to {len(tmp)}. WTF?')
+                raise RuntimeError('Finished pots increased, something went wrong.')
+            
+
+                
 
     def fill_ingredients(self) -> bool:
         ingredients = ['Mox paste', 'Lye paste', 'Aga paste']

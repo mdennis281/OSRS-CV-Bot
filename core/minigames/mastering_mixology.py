@@ -26,6 +26,32 @@ ALEMBIC = Image.open(f"{IMG_PATH}/actions/alembic_raw.png")
 RETORT = Image.open(f"{IMG_PATH}/actions/retort_raw.png")
 ORDER_DONE = Image.open(f"{IMG_PATH}/order_done.png")
 
+POTS_UNFISHISHED = {
+    'aaa': 30014,  # Aerial ale
+    'aam': 30016,  # Azure aura mix
+    'all': 30018,  # Anti-leech lotion
+    'lll': 30017,  # Liplack liquor
+    'mal': 30020,  # Mixalot
+    'mll': 30019,  # Megalite liquid
+    'mma': 30012,  # Mystic mana amalgam
+    'mml': 30013,  # Marley's moonlight
+    'mmm': 30011,  # Mammoth might mix
+    'ala': 30015   # Aqualux amalgam
+}
+
+POTS_FINISHED = {
+    'aaa': 30024,  # Aerial ale
+    'aam': 30026,  # Azure aura mix
+    'all': 30028,  # Anti-leech lotion
+    'lll': 30027,  # Liplack liquors
+    'mal': 30030,  # Mixalot
+    'mll': 30029,  # Megalite liquid
+    'mma': 30022,  # Mystic mana amalgam
+    'mml': 30023,  # Marley's moonlight
+    'mmm': 30021,  # Mammoth might mix
+    'ala': 30025   # Aqualux amalgam
+}
+
 class Action(Enum):
     AGITATOR = "agitator"
     ALEMBIC = "alembic"
@@ -63,6 +89,7 @@ class Order:
         self.ingredients = ingredients
         self.action = action
         self.match = match
+        self.in_inventory: bool = False
 
     def is_done(self, sc: Image.Image) -> bool:
         # make a copy
@@ -74,6 +101,7 @@ class Order:
         if m.confidence > .90:
             return True
         return False
+    
 
     def __repr__(self):
         return f"Order(ingredients={self.ingredients}, action={self.action})"
@@ -141,10 +169,14 @@ class MasteringMixology():
                 raise e
             
         # now we have all ingredients, click the mixer tile
+        existing = self.get_potion_count(potion_name, finished=False)
         self.bot.client.smart_click_tile(
             self.mixer_tile,
             ['take', '-from', 'mix']
         )
+        
+
+
         # validation
         while self.bot.client.is_moving():
             continue
@@ -158,6 +190,14 @@ class MasteringMixology():
         missing_ingredients = 'are missing the following'
         if self.bot.client.is_text_in_chat(missing_ingredients, .5):
             raise MissingIngredientError()
+        
+        # check if potion added to inventory
+        if existing+1 != self.get_potion_count(potion_name, finished=False):
+            if _retry > 0:
+                self.log.error(f'Potion {potion_name} not added to inventory. Retrying...')
+                return self.fill_potion(potion_name, _retry - 1)
+            raise Exception(f"Exhausted retries filling potion {potion_name}.")
+
         self.find_digweed()
     
     def find_digweed(self):
@@ -230,6 +270,14 @@ class MasteringMixology():
         if len(orders) == 0:
             self.log.info("No valid orders found, doing one excluded")
             orders.append(excluded[0])
+
+        existing = self.inv_unfinished_potions()
+
+        for order in orders:
+            if order.ingredients in existing:
+                self.log.info(f"Order {order.ingredients} already in inventory, marking as filled.")
+                order.in_inventory = True
+                existing.remove(order.ingredients)
         return orders
 
     def _get_order_action(self, order: tools.MatchResult) -> Action:
@@ -272,6 +320,48 @@ class MasteringMixology():
 
         return best[0]
     
+    def inv_unfinished_potions(self):
+        """
+        Get a list of unfinished potions in the inventory.
+        """
+        unfinished = []
+        for pot_name, pot in POTS_UNFISHISHED.items():
+            if items := self.bot.client.get_inv_items([pot],min_confidence=.98):
+                for _ in items:
+                    unfinished.append(pot_name)
+
+        return unfinished
+    
+    def inv_finished_potions(self):
+        """
+        Get a list of finished potions in the inventory.
+        """
+        finished = []
+        for pot_name, pot in POTS_FINISHED.items():
+            if items := self.bot.client.get_inv_items([pot],min_confidence=.98):
+                for _ in items:
+                    finished.append(pot_name)
+        return finished
+    
+    def get_potion_count(self, potion_name: str, finished: bool = False) -> int:
+        """
+        Get the count of a specific potion in the inventory.
+        
+        Args:
+            potion_name: Name of the potion to count
+            finished: Whether to count finished or unfinished potions
+            
+        Returns:
+            Count of the specified potion
+        """
+        potions = POTS_FINISHED if finished else POTS_UNFISHISHED
+        potion_name = potion_name.lower()
+        
+        if potion_name not in potions:
+            raise ValueError(f"Potion {potion_name} not found in potions list.")
+        
+        return len(self.bot.client.get_inv_items([potions[potion_name]], min_confidence=.98))
+    
 
     def do_action_station(self, order: Order, _retry: int = 1):
         # Click the station and wait for movement to complete
@@ -284,7 +374,6 @@ class MasteringMixology():
         )
         # Get initial state
         state = self._get_station_state(order)
-        click_cnt = 0
         loop_count = 0
         
         stop_monitoring = threading.Event()
@@ -296,7 +385,7 @@ class MasteringMixology():
         )
         monitor_thread.daemon = True
         monitor_thread.start()
-        max_retort_clicks = random.randint(5, 7)
+        max_retort_clicks = random.randint(4, 6)
 
         self.follow_station()
 
@@ -339,49 +428,89 @@ class MasteringMixology():
         if not order.is_done(self.bot.client.get_screenshot()):
             raise Exception(f"Failed to complete order {order.ingredients} at station with action {order.action}.")
     
-    def _quick_action_executor(self, order: Order, stop_event: threading.Event):
+    def _get_cursor_area_crop(self, crop_size: int = 40) -> Image.Image:
+        """
+        Get a screenshot of the area around the cursor.
+        
+        Args:
+            crop_size: Size of the square around the cursor (total size will be crop_size x crop_size)
+            
+        Returns:
+            Cropped image around the cursor
+        """
+        # Get current mouse position
+        x, y = self.bot.client.mouse_position()
+        
+        # Create a match result for the area around cursor
+        search_area = MatchResult(
+            x - crop_size//2, y - crop_size//2, 
+            x + crop_size//2, y + crop_size//2,
+            confidence=1.0, 
+            scale=1.0,
+            shape=MatchShape.RECT
+        )
+        
+        # Get screenshot and crop
+        sc = self.bot.client.get_screenshot()
+        return search_area.crop_in(sc)
+
+    def _detect_color_in_image(self, image: Image.Image, target_color: Tuple[int, int, int], 
+                              threshold: int = 3, min_pixels: int = 10) -> bool:
+        """
+        Detect if a specific color exists in the given image.
+        
+        Args:
+            image: Image to check
+            target_color: RGB color to look for
+            threshold: HSV threshold for color matching
+            min_pixels: Minimum number of pixels that need to match
+            
+        Returns:
+            True if the color is found, False otherwise
+        """
+        # Convert the cropped image to HSV for better color detection
+        crop_hsv = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2HSV)
+        
+        # Convert target color to HSV
+        target_hsv = cv2.cvtColor(
+            np.uint8([[target_color]]), cv2.COLOR_RGB2HSV
+        )[0][0]
+
+        # Define a range around the target color
+        lower_bound = np.array([max(target_hsv[0] - threshold, 0), 50, 50])
+        upper_bound = np.array([min(target_hsv[0] + threshold, 179), 255, 255])
+
+        # Create a mask for the color range
+        mask = cv2.inRange(crop_hsv, lower_bound, upper_bound)
+
+        # Check if the mask has enough non-zero pixels
+        return np.count_nonzero(mask) > min_pixels
+
+    def _quick_action_executor(self, order: Order, stop_event: threading.Event, crop_size: int = 40, 
+                              color_threshold: int = 3, min_pixels: int = 10):
         """
         Thread function to monitor for quick action tiles near cursor.
         
         Args:
-            detected_event: Event to signal when quick action is detected
+            order: The current order being processed
             stop_event: Event to signal when to stop monitoring
+            crop_size: Size of the area around the cursor to check
+            color_threshold: Threshold for color matching in HSV space
+            min_pixels: Minimum number of pixels that need to match the color
         """
         try:
             while not stop_event.is_set():
-                # Get current mouse position
-                x, y = self.bot.client.mouse_position()
-                
-                # Create a match result for a 30x30 area around cursor
-                search_area = MatchResult(
-                    x - 20, y - 20, 
-                    x + 20, y + 20,
-                    confidence=1.0, 
-                    scale=1.0,
-                    shape=MatchShape.RECT
-                )
-                
                 try:
-                    # Get screenshot and check for color
-                    sc = self.bot.client.get_screenshot()
-                    crop = search_area.crop_in(sc)
+                    # Get crop around cursor
+                    crop = self._get_cursor_area_crop(crop_size)
                     
                     # Check if the quick action tile color exists in the cropped area
-                    # Convert the cropped image to HSV for better color detection
-                    crop_hsv = cv2.cvtColor(np.array(crop), cv2.COLOR_RGB2HSV)
-                    quick_action_hsv = cv2.cvtColor(
-                        np.uint8([[self.quick_action_tile]]), cv2.COLOR_RGB2HSV
-                    )[0][0]
-
-                    # Define a range around the target color
-                    lower_bound = np.array([max(quick_action_hsv[0] - 3, 0), 50, 50])
-                    upper_bound = np.array([min(quick_action_hsv[0] + 3, 179), 255, 255])
-
-                    # Create a mask for the color range
-                    mask = cv2.inRange(crop_hsv, lower_bound, upper_bound)
-
-                    # Check if the mask has more than 10 non-zero pixels
-                    color_match = np.count_nonzero(mask) > 10
+                    color_match = self._detect_color_in_image(
+                        crop, 
+                        self.quick_action_tile, 
+                        threshold=color_threshold,
+                        min_pixels=min_pixels
+                    )
                     
                     if color_match:
                         self.log.info("Quick action detected! Performing immediate action...")
@@ -391,7 +520,7 @@ class MasteringMixology():
                             # using pyautogui to go as fast as possible
                             duration = random.uniform(0.03, 0.1)
                             pyautogui.click(duration=duration)
-                            time.sleep(random.uniform(0.2, 0.4))
+                            time.sleep(random.uniform(0.3, 0.6))
                         time.sleep(1)
 
                 except Exception as e:
