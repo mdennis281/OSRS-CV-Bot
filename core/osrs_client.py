@@ -1,5 +1,3 @@
-import pygetwindow as gw
-import pyautogui
 import mss
 import time
 from PIL import Image
@@ -10,7 +8,7 @@ from core.tools import (
 )
 from core.input.mouse_control import click_in_match, move_to, ClickType, click
 from core import ocr
-from typing import Tuple, List
+from typing import Tuple, List, Optional, Dict, Any
 import threading
 import cv2
 import numpy as np
@@ -25,9 +23,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from core import tools
 from core.control import ScriptControl
 import os
+import sys
+import pyautogui
+from core.window_manager import WindowManager
 from PIL import ImageFilter
 from core.logger import get_logger
-
 
 # Constants
 MAXTHREAD = os.cpu_count()
@@ -70,19 +70,21 @@ class GenericWindow:
         """
         self.log = get_logger('GenericWindow')
         self.window_title = window_title
-        self.window: gw.Win32Window = None
+        self.window = None
         self._last_screenshot: Image.Image = None
+        self.window_manager = WindowManager.create()
         self.update_window()
 
-    def update_window(self) -> gw.Win32Window:
+    def update_window(self):
         """
-        Finds and updates the RuneLite window reference.
+        Finds and updates the window reference.
 
         Returns:
-            gw.Win32Window: The updated window reference.
+            The updated window reference.
         """
-        windows = gw.getWindowsWithTitle(self.window_title)
+        windows = self.window_manager.get_windows_with_title(self.window_title)
         self.window = windows[0] if windows else None
+        return self.window
 
     def start_resize_watch_polling(self, on_resize=None, interval=0.2):
         """
