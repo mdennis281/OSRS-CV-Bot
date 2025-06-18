@@ -272,19 +272,80 @@ class LinuxWindow:
         
         # Try to get absolute position
         try:
+            # First attempt with translate_coords
             root_pos = window.translate_coords(self.display.screen().root, 0, 0)
-            self.left = root_pos.x
-            self.top = root_pos.y
+            
+            # Check if coordinates seem valid
+            if hasattr(root_pos, 'x') and hasattr(root_pos, 'y'):
+                # Ensure coordinates are within reasonable bounds
+                screen_size = pyautogui.size()
+                self.left = max(0, min(screen_size[0] - 1, root_pos.x))
+                self.top = max(0, min(screen_size[1] - 1, root_pos.y))
+            else:
+                # Fallback to alternative positioning
+                self._get_window_position()
         except:
-            # Fallback
-            self.left = 0
-            self.top = 0
+            # If translate_coords fails, try alternative method
+            self._get_window_position()
             
         self.right = self.left + self.width
         self.bottom = self.top + self.height
         
         # Check if window is active
         self.isActive = self._is_active()
+    
+    def _get_window_position(self):
+        """Alternative method to get window position"""
+        try:
+            # Get the window attributes to determine visibility
+            attrs = self.window.get_attributes()
+            
+            # Try to get NET_FRAME_EXTENTS for more accurate positioning
+            try:
+                NET_FRAME_EXTENTS = self.display.intern_atom('_NET_FRAME_EXTENTS')
+                frame_extents = self.window.get_full_property(
+                    NET_FRAME_EXTENTS, self.Xlib.X.AnyPropertyType)
+                
+                if frame_extents:
+                    # Account for window decorations (left, right, top, bottom)
+                    left_frame = frame_extents.value[0]
+                    top_frame = frame_extents.value[2]
+                else:
+                    left_frame = top_frame = 0
+            except:
+                left_frame = top_frame = 0
+                
+            # Get geometry for coordinates in parent
+            geom = self.window.get_geometry()
+            
+            # Start with coordinates relative to parent
+            x, y = geom.x, geom.y
+            
+            # If not root, traverse up the window hierarchy
+            if attrs.map_state == self.Xlib.X.IsViewable:
+                parent = self.window.query_tree().parent
+                screen_root = self.display.screen().root
+                
+                # Keep going until we reach the root window
+                while parent.id != screen_root.id:
+                    parent_geom = parent.get_geometry()
+                    x += parent_geom.x
+                    y += parent_geom.y
+                    parent = parent.query_tree().parent
+            
+            # Adjust for window decorations
+            x -= left_frame
+            y -= top_frame
+                
+            # Ensure values are in valid range
+            screen_size = pyautogui.size()
+            self.left = max(0, min(screen_size[0] - 1, x))
+            self.top = max(0, min(screen_size[1] - 1, y))
+        except Exception as e:
+            log.error(f"Error getting window position: {e}")
+            # Safe fallback values
+            self.left = 0
+            self.top = 0
     
     def _is_active(self):
         """Check if the window is active"""
