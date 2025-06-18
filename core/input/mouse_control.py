@@ -15,8 +15,11 @@ if __name__ == "__main__":
 import ctypes, math, random, time
 import pyautogui, keyboard
 from core.tools import MatchResult          # your class
+from core.control import ScriptControl
 from enum import Enum
 from typing import Tuple
+
+control = ScriptControl()
 
 class ClickType(Enum):
     LEFT = 1
@@ -113,6 +116,7 @@ def _constrain_travel(p1: Tuple[float, float],
     return p1[0] + new_dx, p1[1] + new_dy
 
 # ── click helpers (unchanged API) ──────────────────────────
+@control.guard
 def click(
         x=-1, y=-1, 
         click_type=ClickType.LEFT,
@@ -164,6 +168,7 @@ def click_in_match(
 # ────────────────────────────────────────────────────────────────
 #  Human-like MOVE TO  (overshoot + distance-weighted wobble)
 # ────────────────────────────────────────────────────────────────
+@control.guard
 def move_to(
     tx: int,
     ty: int,
