@@ -846,7 +846,7 @@ class RuneLiteClient(GenericWindow):
         
 
     def get_inv_items(self, 
-            items: List[str],min_confidence=0.97,
+            items: List[str | int],min_confidence=0.97,
             x_sort: bool = None,
             y_sort: bool = None
         ) -> List[MatchResult]:
@@ -856,7 +856,7 @@ class RuneLiteClient(GenericWindow):
         sc = tp.crop_in(sc)
         matches: List[tools.MatchResult] = []
         for item in items:
-            itm = self.item_db.get_item_by_name(item)
+            itm = self.item_db.get_item(item)
             if not itm:
                 raise RuntimeError(f"Item '{item}' not found in database.")
                 
