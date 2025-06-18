@@ -277,16 +277,19 @@ class LinuxWindow:
             
             # Check if coordinates seem valid
             if hasattr(root_pos, 'x') and hasattr(root_pos, 'y'):
-                # Ensure coordinates are within reasonable bounds
-                screen_size = pyautogui.size()
-                self.left = max(0, min(screen_size[0] - 1, root_pos.x))
-                self.top = max(0, min(screen_size[1] - 1, root_pos.y))
+                self.left = root_pos.x
+                self.top = root_pos.y
             else:
                 # Fallback to alternative positioning
                 self._get_window_position()
         except:
             # If translate_coords fails, try alternative method
             self._get_window_position()
+            
+        # Ensure values are in valid range
+        screen_size = pyautogui.size()
+        self.left = max(0, min(screen_size[0] - 1, self.left))
+        self.top = max(0, min(screen_size[1] - 1, self.top))
             
         self.right = self.left + self.width
         self.bottom = self.top + self.height
@@ -295,52 +298,30 @@ class LinuxWindow:
         self.isActive = self._is_active()
     
     def _get_window_position(self):
-        """Alternative method to get window position"""
+        """
+        Alternative method to get window position by traversing the window tree.
+        This calculates the absolute position of the client area.
+        """
         try:
-            # Get the window attributes to determine visibility
-            attrs = self.window.get_attributes()
-            
-            # Try to get NET_FRAME_EXTENTS for more accurate positioning
-            try:
-                NET_FRAME_EXTENTS = self.display.intern_atom('_NET_FRAME_EXTENTS')
-                frame_extents = self.window.get_full_property(
-                    NET_FRAME_EXTENTS, self.Xlib.X.AnyPropertyType)
-                
-                if frame_extents:
-                    # Account for window decorations (left, right, top, bottom)
-                    left_frame = frame_extents.value[0]
-                    top_frame = frame_extents.value[2]
-                else:
-                    left_frame = top_frame = 0
-            except:
-                left_frame = top_frame = 0
-                
-            # Get geometry for coordinates in parent
+            # This logic is adapted from pygetwindow's X11 implementation.
+            # It traverses up the window tree, summing the geometry offsets.
             geom = self.window.get_geometry()
+            x = geom.x
+            y = geom.y
             
-            # Start with coordinates relative to parent
-            x, y = geom.x, geom.y
+            parent = self.window.query_tree().parent
+            screen_root = self.display.screen().root
             
-            # If not root, traverse up the window hierarchy
-            if attrs.map_state == self.Xlib.X.IsViewable:
-                parent = self.window.query_tree().parent
-                screen_root = self.display.screen().root
+            while parent and parent.id != screen_root.id:
+                parent_geom = parent.get_geometry()
+                x += parent_geom.x
+                y += parent_geom.y
                 
-                # Keep going until we reach the root window
-                while parent.id != screen_root.id:
-                    parent_geom = parent.get_geometry()
-                    x += parent_geom.x
-                    y += parent_geom.y
-                    parent = parent.query_tree().parent
-            
-            # Adjust for window decorations
-            x -= left_frame
-            y -= top_frame
-                
-            # Ensure values are in valid range
-            screen_size = pyautogui.size()
-            self.left = max(0, min(screen_size[0] - 1, x))
-            self.top = max(0, min(screen_size[1] - 1, y))
+                # Move to the next parent in the hierarchy
+                parent = parent.query_tree().parent
+
+            self.left = x
+            self.top = y
         except Exception as e:
             log.error(f"Error getting window position: {e}")
             # Safe fallback values
