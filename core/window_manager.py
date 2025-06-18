@@ -298,8 +298,10 @@ class LinuxWindow:
             return
             
         try:
-            self.window.set_input_focus()
+            # Fix: Add the required arguments to set_input_focus
+            self.window.set_input_focus(self.Xlib.X.RevertToParent, 0)
             self.window.configure(stack_mode=self.Xlib.X.Above)
+            self.display.flush()
             self.display.sync()
         except Exception as e:
             print(f"Error activating window: {e}")
@@ -317,13 +319,19 @@ class LinuxWindow:
             
             # Method 1: Direct focus
             try:
-                self.window.set_input_focus(self.Xlib.X.RevertToParent, 0)  # Use 0 instead of timestamp
+                self.window.set_input_focus(self.Xlib.X.RevertToParent, 0)
                 self.window.configure(stack_mode=self.Xlib.X.Above)
                 self.display.flush()
                 self.display.sync()
                 print("Direct focus attempt completed")
+                time.sleep(0.2)  # Give window manager time to respond
             except Exception as e:
                 print(f"Direct focus failed: {e}")
+            
+            # Check if already active before trying more methods
+            if self._is_active():
+                print("Window is now active, stopping focus attempts")
+                return
             
             # Method 2: _NET_ACTIVE_WINDOW (EWMH)
             try:
@@ -356,6 +364,12 @@ class LinuxWindow:
             except Exception as e:
                 print(f"EWMH focus failed: {e}")
             
+            # Add check between each method
+            time.sleep(0.2)
+            if self._is_active():
+                print("Window is now active after EWMH attempt")
+                return
+            
             # Method 3: Map and raise window
             try:
                 self.window.map()
@@ -366,32 +380,45 @@ class LinuxWindow:
             except Exception as e:
                 print(f"Map and raise failed: {e}")
             
+            time.sleep(0.2)
+            if self._is_active():
+                print("Window is now active after map and raise")
+                return
+            
             # Method 4: Use keyboard if available
             if keyboard:
                 try:
                     keyboard.press('alt')
                     time.sleep(0.1)
-                    self.activate()
+                    # Use direct calls instead of self.activate() to avoid potential issues
+                    self.window.set_input_focus(self.Xlib.X.RevertToParent, 0)
+                    self.window.configure(stack_mode=self.Xlib.X.Above)
+                    self.display.flush()
+                    self.display.sync()
                     time.sleep(0.1)
                     keyboard.release('alt')
                     print("Keyboard focus attempt completed")
+                    time.sleep(0.2)
                 except Exception as e:
                     print(f"Keyboard focus failed: {e}")
             
-            # Method 5: Minimize/restore if not active
-            time.sleep(0.2)
+            # Only minimize/restore as a last resort
             if not self._is_active():
-                print("First focus attempts failed, trying minimize/restore...")
+                print("All focus attempts failed, trying minimize/restore...")
                 try:
                     self.minimize()
                     time.sleep(0.5)
-                    self.restore()
+                    # Call methods directly instead of using self.restore()
+                    self.window.map()
+                    self.window.set_input_focus(self.Xlib.X.RevertToParent, 0)
+                    self.window.configure(stack_mode=self.Xlib.X.Above)
                     self.display.flush()
                     self.display.sync()
                     print("Minimize/restore focus attempt completed")
                 except Exception as e:
                     print(f"Minimize/restore failed: {e}")
             
+            time.sleep(0.3)  # Final wait to let window manager catch up
             print(f"Window active after focus attempts: {self._is_active()}")
             
         except Exception as e:
