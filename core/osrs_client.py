@@ -83,6 +83,8 @@ class GenericWindow:
             The updated window reference.
         """
         windows = self.window_manager.get_windows_with_title(self.window_title)
+        if not self.window and windows:
+            self.log.debug(f'Window found with title: {windows[0].title}')
         self.window = windows[0] if windows else None
         return self.window
 
