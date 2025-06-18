@@ -8,11 +8,14 @@ import pyautogui
 import time
 import keyboard
 import importlib
+from core.logger import get_logger
 
 # Platform detection
 IS_WINDOWS = sys.platform.startswith('win')
 IS_MAC = sys.platform == 'darwin'
 IS_LINUX = sys.platform.startswith('linux')
+
+log = get_logger("OSWindow")
 
 class WindowManager:
     """Cross-platform window management"""
@@ -25,24 +28,24 @@ class WindowManager:
                 import pygetwindow as gw
                 return WindowsWindowManager()
             except ImportError:
-                print("Warning: pygetwindow not found, falling back to basic window manager")
+                log.warning("Warning: pygetwindow not found, falling back to basic window manager")
                 return BasicWindowManager()
         elif IS_MAC:
             try:
                 import AppKit
                 return MacWindowManager()
             except ImportError:
-                print("Warning: pyobjc not found, falling back to basic window manager")
+                log.warning("Warning: pyobjc not found, falling back to basic window manager")
                 return BasicWindowManager()
         elif IS_LINUX:
             try:
                 import Xlib
                 return LinuxWindowManager()
             except ImportError:
-                print("Warning: python-xlib not found, falling back to basic window manager")
+                log.warning("Warning: python-xlib not found, falling back to basic window manager")
                 return BasicWindowManager()
         else:
-            print(f"Warning: Unsupported platform {sys.platform}, using basic window manager")
+            log.warning(f"Unsupported platform {sys.platform}, using basic window manager")
             return BasicWindowManager()
 
 class BasicWindowManager:
@@ -77,7 +80,7 @@ class BasicWindow:
             # Minimal implementation - just call activate
             self.activate()
         except Exception as e:
-            print(f"Error bringing window to focus: {e}")
+            log.error(f"Error bringing window to focus: {e}")
     
     def minimize(self):
         """Minimize the window (no-op in basic implementation)"""
@@ -198,7 +201,7 @@ class MacWindow:
             if not self.isActive:
                 self.app.activateWithOptions_(1)  # 1 = Activate and bring to front
         except Exception as e:
-            print(f"Error focusing macOS window: {e}")
+            log.error(f"Error focusing macOS window: {e}")
     
     def minimize(self):
         """Minimize the window (best effort)"""
@@ -219,7 +222,7 @@ class LinuxWindowManager:
             self.display = Xlib.display.Display()
             self.root = self.display.screen().root
         except ImportError:
-            print("Warning: Xlib module not found or couldn't be imported")
+            log.warning("Xlib module not found or couldn't be imported")
             self.Xlib = None
             self.display = None
             self.root = None
@@ -227,7 +230,7 @@ class LinuxWindowManager:
     def get_windows_with_title(self, title):
         """Get windows with the given title using Xlib"""
         if not self.Xlib:
-            print("Xlib not available, returning empty window list")
+            log.warning("Xlib not available, returning empty window list")
             return []
             
         try:
@@ -250,7 +253,7 @@ class LinuxWindowManager:
                     
             return windows
         except Exception as e:
-            print(f"Error enumerating Linux windows: {e}")
+            log.error(f"Error enumerating Linux windows: {e}")
             return []
 
 class LinuxWindow:
@@ -294,7 +297,7 @@ class LinuxWindow:
     def activate(self):
         """Activate the window"""
         if not self.Xlib:
-            print("Warning: Xlib not available, can't activate window")
+            log.warning("Xlib not available, can't activate window")
             return
             
         try:
@@ -304,12 +307,12 @@ class LinuxWindow:
             self.display.flush()
             self.display.sync()
         except Exception as e:
-            print(f"Error activating window: {e}")
+            log.error(f"Error activating window: {e}")
     
     def bring_to_focus(self):
         """Bring window to foreground on Linux"""
         if not self.Xlib:
-            print("Warning: Xlib not available, can't focus window")
+            log.warning("Xlib not available, can't focus window")
             return
             
         try:
@@ -327,12 +330,13 @@ class LinuxWindow:
                 return
             
             # If focus failed, try once more with map operation
+            log.debug("First focus attempt failed, trying map operation")
             self.window.map()
             self.window.raise_window()
             self.display.flush()
             self.display.sync()
         except Exception as e:
-            print(f"Error focusing Linux window: {e}")
+            log.error(f"Error focusing Linux window: {e}")
     
     def minimize(self):
         """Minimize the window"""
@@ -350,7 +354,7 @@ class LinuxWindow:
             self.display.screen().root.send_event(iconify_event, mask)
             self.display.sync()
         except Exception as e:
-            print(f"Error minimizing window: {e}")
+            log.error(f"Error minimizing window: {e}")
     
     def restore(self):
         """Restore the window"""
