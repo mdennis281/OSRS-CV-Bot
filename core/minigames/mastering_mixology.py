@@ -285,7 +285,7 @@ class MasteringMixology():
         Determine the action required for the given order based on the image match.
         """
         sc = self.bot.client.get_screenshot()
-        order.end_x = order.start_x + 25 # 
+        order.end_x = order.start_x + 25 
         sc = order.crop_in(sc)
         
 
@@ -375,6 +375,7 @@ class MasteringMixology():
         # Get initial state
         state = self._get_station_state(order)
         loop_count = 0
+        click_cnt = 0
         
         stop_monitoring = threading.Event()
         
