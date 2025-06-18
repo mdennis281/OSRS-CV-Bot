@@ -3,13 +3,11 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageChops
 from dataclasses import dataclass
 from enum import Enum
-import pytesseract
 from core import ocr
 from typing import Tuple, Optional, List
 from core.region_match import MatchResult, ShapeResult, MatchShape
 from functools import wraps
 
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 
 def find_subimage(parent: Image.Image,
