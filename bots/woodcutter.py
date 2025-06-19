@@ -25,7 +25,7 @@ class BotConfig(BotConfigMixin):
     tree_tiles: RGBListParam = RGBListParam([
         RGBParam(255, 0, 255),  # Magenta by default
         RGBParam(255, 0, 200),  # Another shade
-        RGBParam(255, 0, 150),  # Yet another shade
+        #RGBParam(255, 0, 150),  # Yet another shade
     ])
     # Retry configuration
     max_retries: IntParam = IntParam(3)  # Maximum number of retries before giving up
