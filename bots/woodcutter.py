@@ -46,7 +46,7 @@ class BotConfig(BotConfigMixin):
     drop_items: BooleanParam = BooleanParam(False)  # True = drop logs, False = bank logs
     bank_tile: RGBParam = RGBParam(0, 255, 0)  # Green by default, only used when banking
     bank_to_trees: RouteParam = RouteParam([
-        WaypointParam(3094, 3244, 0, 790933, 8),
+        # WaypointParam(3094, 3244, 0, 790933, 8),
         WaypointParam(3105, 3240, 0, 790932, 8),
         WaypointParam(3091, 3230, 0, 790932, 5)
     ])  # Empty default route, configure in UI
