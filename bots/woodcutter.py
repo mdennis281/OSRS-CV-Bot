@@ -16,7 +16,7 @@ from core.logger import get_logger
 import sys
 import keyboard
 
-class BotConfig(BotConfigMixin):
+class BotConfig(BotConfigMixin): 
     # Configuration parameters
     name: str = "Woodcutter Bot"
     description: str = "A bot that chops trees and banks or drops logs when inventory is full"
@@ -27,17 +27,6 @@ class BotConfig(BotConfigMixin):
         RGBParam(255, 0, 200),  # Another shade
         RGBParam(255, 0, 150),  # Yet another shade
     ])
-    log_type: StringParam = StringParam("Oak logs")  # Default log name
-    
-    # Inventory management configuration
-    drop_items: BooleanParam = BooleanParam(False)  # True = drop logs, False = bank logs
-    bank_tile: RGBParam = RGBParam(0, 255, 0)  # Green by default, only used when banking
-    bank_to_trees: RouteParam = RouteParam([
-        WaypointParam(3253, 3428, 0, 838060, 5),
-        WaypointParam(3275, 3428, 0, 838060, 5)
-    ])  # Empty default route, configure in UI
-    inv_full_at: IntParam = IntParam(28)  # Default inventory capacity
-    
     # Retry configuration
     max_retries: IntParam = IntParam(3)  # Maximum number of retries before giving up
     
@@ -50,6 +39,33 @@ class BotConfig(BotConfigMixin):
         FloatParam(0.01)     # break chance
     )
 
+    ###########################################
+    # Willows at Draynor Village
+    ###########################################
+    log_type: StringParam = StringParam("Willow logs")  # Default log name
+    drop_items: BooleanParam = BooleanParam(False)  # True = drop logs, False = bank logs
+    bank_tile: RGBParam = RGBParam(0, 255, 0)  # Green by default, only used when banking
+    bank_to_trees: RouteParam = RouteParam([
+        WaypointParam(3094, 3244, 0, 790933, 8),
+        WaypointParam(3091, 3233, 0, 790932, 5)
+    ])  # Empty default route, configure in UI
+    inv_full_at: IntParam = IntParam(27)  # Default inventory capacity
+
+    
+    
+    ###########################################
+    # Oaks at east Varrock
+    ###########################################
+    # log_type: StringParam = StringParam("Oak logs")  # Default log name
+    # drop_items: BooleanParam = BooleanParam(False)  # True = drop logs, False = bank logs
+    # bank_tile: RGBParam = RGBParam(0, 255, 0)  # Green by default, only used when banking
+    # bank_to_trees: RouteParam = RouteParam([
+    #     WaypointParam(3253, 3428, 0, 838060, 5),
+    #     WaypointParam(3275, 3428, 0, 838060, 5)
+    # ])  # Empty default route, configure in UI
+    # inv_full_at: IntParam = IntParam(28)  # Default inventory capacity
+    
+    
 class BotExecutor(Bot):
     def __init__(self, config: BotConfig, user=''):
         super().__init__(user, break_cfg=config.break_cfg)
@@ -101,8 +117,13 @@ class BotExecutor(Bot):
                 
                 # Check if we're woodcutting, if not, click on tree
                 if not self.client.is_woodcutting:
-                    self.log.info("Not woodcutting. Clicking tree...")
-                    self.chop_tree()
+                    try:
+                        self.log.info("Not woodcutting. Clicking tree...")
+                        self.chop_tree()
+                    except Exception as e:
+                        self.log.warning(f"Did we die or something? walking to trees: {e}")
+                        self.mover.execute_route(self.cfg.bank_to_trees)
+                        self.chop_tree()
                 
                 # Wait a bit before checking status again
                 time.sleep(self.cfg.inventory_check_delay.choose())
