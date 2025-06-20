@@ -133,6 +133,7 @@ class MovementOrchestrator:
         x += random.randint(-10, 10)
         y += random.randint(-10, 10)
         self.client.move_to((x,y))
+        time.sleep(random.uniform(0.1, 0.3))
         def do_zoom(i):
             amount = -(i * 600)
             
