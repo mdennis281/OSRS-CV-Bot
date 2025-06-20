@@ -278,6 +278,10 @@ class MasteringMixology():
                 self.log.info(f"Order {order.ingredients} already in inventory, marking as filled.")
                 order.in_inventory = True
                 existing.remove(order.ingredients)
+
+        # Sort orders so that RETORT actions are always last
+        orders = sorted(orders, key=lambda order: 1 if order.action == Action.RETORT else 0)
+        
         return orders
 
     def _get_order_action(self, order: tools.MatchResult) -> Action:
