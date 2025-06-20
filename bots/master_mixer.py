@@ -116,6 +116,7 @@ class BotExecutor(Bot):
         self.log.info(f'Mixing digweed with approved potion.')
         self.client.click(digweed[0])
         self.client.click(pots[0])
+        self.client.move_off_window()
         
     
     def click_conveyor(self):
