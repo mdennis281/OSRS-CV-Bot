@@ -27,7 +27,7 @@ class BotConfig(BotConfigMixin):
     digweed_tile: RGBParam = RGBParam(0, 255, 255)
     hopper_tile: RGBParam = RGBParam(255, 0 , 40)
     ingredient_exclude: StringListParam = StringListParam(
-        [ 'aaa'] # 'mmm', 'mma',
+        [ 'aaa', 'mmm', 'mma', 'aam', 'ala' ] # 'mmm', 'mma',
     )
     digweed_potions: StringListParam = StringListParam(
         ['Liplack liquor']
@@ -65,15 +65,22 @@ class BotExecutor(Bot):
     def loop(self):
         while True:
             orders = self.mixer.get_orders()
-            try:
-                for order in orders:
+            
+            for order in orders:
+                try:
                     self.log.info(f"Filling vial: {order.ingredients}")
                     self.mixer.fill_potion(order.ingredients)
                     while self.client.is_moving(): continue
                     order.in_inventory = True
-            except MissingIngredientError as e:
-                if not self.fill_ingredients():
-                    raise e
+                except MissingIngredientError as e:
+                    self.log.error(f"Missing ingredient for {order.ingredients}, attempting to refill.")
+                    if not self.fill_ingredients():
+                        raise e
+                    self.log.info(f"Reattempting to fill vial: {order.ingredients}")
+                    self.mixer.fill_potion(order.ingredients)
+                    while self.client.is_moving(): continue
+                    order.in_inventory = True
+                
 
 
 
@@ -82,6 +89,10 @@ class BotExecutor(Bot):
             try:
                 for order in orders:
                     self.log.info(f"Executing action: {order}")
+                    # if the potion disappeared
+                    if order.ingredients not in self.mixer.inv_unfinished_potions():
+                        self.log.critical(f"Potion {order.ingredients} not found in inventory. did a station not finish?")
+                        return
                     self.mixer.do_action_station(order)
             except Exception as e:
                 self.log.error(f"Error with stations: {e}")

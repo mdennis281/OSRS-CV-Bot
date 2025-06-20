@@ -296,7 +296,6 @@ class MasteringMixology():
             match = tools.find_subimage(sc, action_image)
             # print(f"Checking action: {action} with match: {match.confidence}")
             if match and match.confidence > best[1]:
-                
                 best = (action, match.confidence, match)
 
         # print(f"Best action match: {best[0]} with confidence {best[1]}")
@@ -395,9 +394,6 @@ class MasteringMixology():
                 
                 if state == 1:
                     if order.action == Action.RETORT:
-                        if order.is_done(self.bot.client.get_screenshot()):
-                            self.log.info(f"Order {order.ingredients} completed at station with action {order.action}.")
-                            break
                         if click_cnt < max_retort_clicks:
                             self.bot.client.click(
                                 self.bot.client.mouse_position(),
