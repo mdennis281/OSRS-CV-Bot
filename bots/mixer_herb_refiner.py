@@ -15,18 +15,28 @@ import pyautogui
 from core.logger import get_logger
 import sys
 
+# TODO: 
+    #  - handle level up during refining
+
 class BotConfig(BotConfigMixin):
+    
     # Configuration parameters
     name: str = "Mixer Herb Refiner"
     description: str = "A bot that withdraws herbs from the bank, cleans them if grimy, and refines them."
 
     bank_tile: RGBParam = RGBParam(255, 255, 0)  # Yellow
     refiner_tile: RGBParam = RGBParam(0, 255, 0)  # Green
-    herb_option: StringParam = StringParam("Grimy Dwarf Weed")  # Default herb to refine
-    
+    #herb_option: StringParam = StringParam("Grimy lantadyme")  # aga
+    #herb_option: StringParam = StringParam("Grimy kwuarm") # lye
+    herb_option: StringParam = StringParam("Grimy tarromin")  # mox
+
     # Optional configuration
     deposit_delay: RangeParam = RangeParam(0.5, 1.5)
     withdraw_delay: RangeParam = RangeParam(0.5, 1.5)
+    
+    # Monitoring configuration
+    stall_timeout: IntParam = IntParam(5)  # Time in seconds to wait before checking for stalled processing
+    process_timeout: IntParam = IntParam(60)  # Total timeout for the entire herb processing
     
     # Retry configuration
     max_retries: IntParam = IntParam(2)  # Maximum number of retries before giving up
@@ -128,7 +138,10 @@ class BotExecutor(Bot):
         max_attempts = 2
         for attempt in range(max_attempts):
             try:
-                grimy_herbs = self.client.get_inv_items([herb_name], min_confidence=0.9)
+                grimy_herbs = self.client.get_inv_items(
+                    [herb_name], min_confidence=0.9,
+                    y_sort=False,x_sort=False
+                )
                 break
             except Exception as e:
                 if attempt == max_attempts - 1:
@@ -163,47 +176,144 @@ class BotExecutor(Bot):
         except Exception as e:
             self.log.error(f"Error verifying cleaned herbs: {e}")
     
-    def refine_herbs(self):
-        """Click the refiner tile and wait until herbs are processed"""
+    def get_herb_count(self, include_grimy=True):
+        """Count herbs in inventory, both clean and grimy if specified."""
         herb_name = self.cfg.herb_option.value
-        if "grimy" in herb_name.lower():
-            # Use clean herb name for checking
-            herb_name = herb_name.replace("Grimy ", "")
+        clean_herb_name = herb_name.replace("Grimy ", "")
+        
+        try:
+            count = 0
+            
+            # Check for clean herbs
+            clean_herbs = self.client.get_inv_items([clean_herb_name], min_confidence=0.98)
+            count += len(clean_herbs)
+            
+            # Check for grimy herbs if requested
+            if include_grimy and "grimy" in herb_name.lower():
+                grimy_herbs = self.client.get_inv_items([herb_name], min_confidence=0.98)
+                count += len(grimy_herbs)
+                
+            return count, clean_herbs, grimy_herbs if include_grimy and "grimy" in herb_name.lower() else []
+        except Exception as e:
+            self.log.warning(f"Error counting herbs: {e}")
+            return 0, [], []
+    
+    def check_and_clean_remaining_grimy(self):
+        """Check inventory for any remaining grimy herbs and clean them."""
+        herb_name = self.cfg.herb_option.value
+        if "grimy" not in herb_name.lower():
+            return False  # Not a grimy herb type
+            
+        try:
+            # Find any remaining grimy herbs
+            grimy_herbs = self.client.get_inv_items([herb_name], min_confidence=0.9)
+            if not grimy_herbs:
+                return False  # No grimy herbs found
+                
+            self.log.info(f"Found {len(grimy_herbs)} remaining grimy herbs to clean")
+            for herb in grimy_herbs:
+                try:
+                    self.client.click(herb, rand_move_chance=0.0, after_click_settle_chance=0)
+                except Exception as e:
+                    self.log.warning(f"Failed to click herb: {e}")
+                    
+            time.sleep(0.5)  # Wait for cleaning animation
+            
+            # Verify cleaning was successful
+            remaining_grimy = self.client.get_inv_items([herb_name], min_confidence=0.9)
+            return len(remaining_grimy) == 0
+        except Exception as e:
+            self.log.warning(f"Error checking for remaining grimy herbs: {e}")
+            return False
+
+    def refine_herbs(self):
+        """Click the refiner tile and wait until herbs are processed with improved monitoring."""
+        herb_name = self.cfg.herb_option.value
+        clean_herb_name = herb_name.replace("Grimy ", "") if "grimy" in herb_name.lower() else herb_name
+        
+        # Get initial herb count
+        initial_count, _, _ = self.get_herb_count()
+        if initial_count == 0:
+            self.log.warning("No herbs found to refine")
+            return
+            
+        self.log.info(f"Starting refining with {initial_count} herbs")
         
         # Click refiner tile
+        self.click_refiner()
+        
+        # Wait until character stops moving
+        while self.client.is_moving():
+            time.sleep(0.2)
+        
+        # Monitor herb processing with progress checks
+        start_time = time.time()
+        last_count = initial_count
+        last_progress_time = start_time
+        
+        while time.time() - start_time < self.cfg.process_timeout.value:
+            # Get current herb count
+            current_count, clean_herbs, grimy_herbs = self.get_herb_count()
+            
+            # If all herbs are processed, we're done
+            if current_count == 0:
+                self.log.info("All herbs processed successfully")
+                return
+                
+            # Check if progress has stalled
+            if current_count == last_count and time.time() - last_progress_time > self.cfg.stall_timeout.value:
+                self.log.warning(f"Processing stalled at {current_count} herbs remaining")
+                
+                # Check if we have any grimy herbs that need cleaning
+                if grimy_herbs:
+                    self.log.info(f"Found {len(grimy_herbs)} grimy herbs that need cleaning")
+                    self.check_and_clean_remaining_grimy()
+                    
+                    # Try refining again
+                    self.log.info("Clicking refiner again after cleaning herbs")
+                    self.click_refiner()
+                    while self.client.is_moving():
+                        time.sleep(0.2)
+                else:
+                    # If no grimy herbs but still stalled, try clicking refiner again
+                    self.log.info("No grimy herbs found but processing stalled. Clicking refiner again.")
+                    self.click_refiner()
+                    while self.client.is_moving():
+                        time.sleep(0.2)
+                
+                # Reset progress timer
+                last_progress_time = time.time()
+            
+            # If count decreased, update progress tracking
+            elif current_count < last_count:
+                self.log.info(f"Processing herbs: {current_count}/{initial_count} remaining")
+                last_count = current_count
+                last_progress_time = time.time()
+                
+            time.sleep(0.5)
+        
+        # If we get here, we've timed out
+        remaining, _, _ = self.get_herb_count()
+        if remaining > 0:
+            raise RuntimeError(f"Timed out waiting for herbs to be processed. {remaining} herbs remaining.")
+        else:
+            self.log.info("All herbs processed")
+
+    def click_refiner(self):
+        """Helper method to click the refiner tile."""
         self.log.info("Clicking refiner tile...")
         max_attempts = 2
         for attempt in range(max_attempts):
             try:
                 self.client.smart_click_tile(
                     self.cfg.refiner_tile.value,
-                    ['refiner', 'process', 'herb', 'grind'],
+                    ['refiner', 'operate'],
                     retry_hover=5
                 )
-                break
+                return True
             except Exception as e:
                 if attempt == max_attempts - 1:
                     raise RuntimeError(f"Failed to click refiner tile after {max_attempts} attempts: {e}")
                 self.log.warning(f"Failed to click refiner (attempt {attempt+1}/{max_attempts}): {e}")
                 time.sleep(1)
-        
-        # Wait until character stops moving
-        while self.client.is_moving():
-            time.sleep(0.2)
-            
-        # Wait until herbs are gone from inventory
-        self.log.info("Waiting for herbs to be processed...")
-        start_time = time.time()
-        timeout = 60  # Timeout after 60 seconds
-        
-        while time.time() - start_time < timeout:
-            try:
-                herbs = self.client.get_inv_items([herb_name], min_confidence=0.85)
-                if not herbs:
-                    self.log.info("All herbs processed")
-                    return
-            except Exception as e:
-                self.log.warning(f"Error checking inventory: {e}")
-            time.sleep(0.5)
-            
-        raise RuntimeError(f"Timed out waiting for herbs to be processed after {timeout} seconds")
+        return False

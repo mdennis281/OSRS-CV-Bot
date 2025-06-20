@@ -137,8 +137,7 @@ class GenericWindow:
         Returns:
             bool: True if the window is open, False otherwise.
         """
-        #
-        # self.update_window()
+        #self.update_window()
         return self.window is not None
 
     @property

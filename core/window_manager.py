@@ -89,6 +89,10 @@ class BasicWindow:
     def restore(self):
         """Restore the window (best effort)"""
         pass
+    
+    def is_focused(self):
+        """Always returns True for fallback window"""
+        return True
 
 class WindowsWindowManager:
     """Windows-specific window management using pygetwindow"""
@@ -123,17 +127,26 @@ class WindowsWindow:
     
     def bring_to_focus(self):
         """Bring window to foreground on Windows"""
-        # Pressing alt makes activate() more reliable on Windows
+        if not self.is_focused():
+            # Pressing alt makes activate() more reliable on Windows
+            try:
+                keyboard.press('alt')
+                self.win32_window.activate()
+            except:
+                self.win32_window.minimize()
+                self.win32_window.restore()
+                time.sleep(0.3)
+            finally:
+                keyboard.release('alt')
+
+    def is_focused(self):
+        """Return True if this window is the active window"""
         try:
-            # Pressing alt makes activate() more reliable
-            keyboard.press('alt')
-            self.win32_window.activate()
-        except:
-            self.win32_window.minimize()
-            self.win32_window.restore()
-            time.sleep(0.3)
-        finally:
-            keyboard.release('alt')
+            import pygetwindow as gw
+            active = gw.getActiveWindow()
+            return active and active._hWnd == self.win32_window._hWnd
+        except Exception:
+            return False
     
     def minimize(self):
         """Minimize the window"""
@@ -210,6 +223,13 @@ class MacWindow:
     def restore(self):
         """Restore the window (best effort)"""
         self.activate()
+
+    def is_focused(self):
+        """Return True if this window is the active app"""
+        try:
+            return self.app.isActive()
+        except Exception:
+            return False
 
 class LinuxWindowManager:
     """Linux-specific window management using Xlib"""
@@ -394,3 +414,7 @@ class LinuxWindow:
     def restore(self):
         """Restore the window"""
         self.activate()
+
+    def is_focused(self):
+        """Return True if this window is the active window"""
+        return self._is_active()
