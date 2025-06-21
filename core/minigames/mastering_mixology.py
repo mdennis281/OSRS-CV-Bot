@@ -281,7 +281,7 @@ class MasteringMixology():
 
         # Sort orders so that RETORT actions are always last
         orders = sorted(orders, key=lambda order: 1 if order.action == Action.RETORT else 0)
-        
+
         return orders
 
     def _get_order_action(self, order: tools.MatchResult) -> Action:
@@ -329,7 +329,7 @@ class MasteringMixology():
         """
         unfinished = []
         for pot_name, pot in POTS_UNFISHISHED.items():
-            if items := self.bot.client.get_inv_items([pot],min_confidence=.98):
+            if items := self.bot.client.get_inv_items([pot],min_confidence=.97):
                 for _ in items:
                     unfinished.append(pot_name)
 
@@ -341,7 +341,7 @@ class MasteringMixology():
         """
         finished = []
         for pot_name, pot in POTS_FINISHED.items():
-            if items := self.bot.client.get_inv_items([pot],min_confidence=.98):
+            if items := self.bot.client.get_inv_items([pot],min_confidence=.97):
                 for _ in items:
                     finished.append(pot_name)
         return finished
