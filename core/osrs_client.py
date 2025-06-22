@@ -28,6 +28,7 @@ import sys
 import pyautogui
 from core.window_manager import WindowManager
 from PIL import ImageFilter
+from core.ocr.custom import read_location_numbers
 from core.logger import get_logger
 
 # Constants
@@ -774,17 +775,10 @@ class RuneLiteClient(GenericWindow):
         # Compare positions to determine movement
         return positions[0].tile != positions[1].tile
     
+    @timeit
     def get_position(self,retry_cnt=0) -> 'PlayerPosition':
         def do_ocr(match: MatchResult, sc: Image.Image) -> str:
-            return ocr.execute(
-                match.crop_in(sc),
-                font=ocr.FontChoice.AUTO,
-                psm=ocr.TessPsm.SINGLE_LINE,
-                oem= ocr.TessOem.DEFAULT,
-                characters="0123456789,",
-                raise_on_blank=False,
-                preprocess=True
-            )
+            return read_location_numbers(match.crop_in(sc))
         sc = self.get_screenshot()
         position_container = POSITION_STATE
         match = self.find_in_window(
@@ -794,7 +788,7 @@ class RuneLiteClient(GenericWindow):
 
         
         
-        if match.confidence < 0.99:
+        if match.confidence < 0.98:
             if retry_cnt > 0:
                 time.sleep(1)
                 self.log.info(f"Retrying position detection: {retry_cnt} attempts remaining")
