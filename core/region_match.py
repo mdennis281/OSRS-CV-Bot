@@ -156,7 +156,17 @@ class MatchResult(RegionMixin):
         if ex <= sx or ey <= sy:                # degenerate → no change
             return img
         draw = ImageDraw.Draw(img)
-        draw.rectangle((sx, sy, ex, ey), fill=(0, 0, 0, 0))
+        # Choose appropriate fill color based on image mode
+        if img.mode == 'RGBA':
+            fill = (0, 0, 0, 0)  # Transparent black for RGBA
+        elif img.mode == 'RGB':
+            fill = (0, 0, 0)     # Black for RGB
+        elif img.mode == 'L':
+            fill = 0             # Black for grayscale
+        else:
+            # Default to black (adjust for other modes as needed)
+            fill = 0
+        draw.rectangle((sx, sy, ex, ey), fill=fill)
         return img
 
     def outline(self, pad_x=0, pad_y=0):
