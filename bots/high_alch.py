@@ -24,7 +24,7 @@ class BotConfig(BotConfigMixin):
     # makes it more human-like
     tab_check_range = RangeParam(.5,1.75)
     break_cfg: BreakCfgParam = BreakCfgParam(
-        RangeParam(15, 45),  # break duration range in seconds
+        RangeParam(30, 75),  # break duration range in seconds
         FloatParam(0.01)  # break chance
     )
 
@@ -61,6 +61,8 @@ class BotExecutor(Bot):
                 rand_move_chance=0, 
                 after_click_settle_chance=0
             )
+
+            self.control.propose_break()
 
             if random.random() < self.cfg.chance_change_point.value:
                 self.get_overlap_point()

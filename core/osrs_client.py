@@ -911,7 +911,7 @@ class RuneLiteClient(GenericWindow):
         t.start()
         while self.is_moving():
             continue
-        time.sleep(0.5)  # Give it a moment to settle
+        time.sleep(0.2)  # Give it a moment to settle
         stop.set()
 
 

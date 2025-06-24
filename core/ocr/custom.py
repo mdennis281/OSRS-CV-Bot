@@ -53,7 +53,7 @@ def _match_digit(parent: Image.Image, template: Image.Image, digit: str) -> List
         result = cv2.matchTemplate(parent_np, template_np, cv2.TM_CCORR_NORMED)
         
         # Find all matches above threshold
-        threshold = 0.7
+        threshold = 0.98
         locations = np.where(result >= threshold)
         
         for pt in zip(*locations[::-1]):  # Switch columns and rows

@@ -1,4 +1,4 @@
-from bots.woodcutter import BotConfig, BotExecutor
+from bots.high_alch import BotConfig, BotExecutor
 
 
 def main():
