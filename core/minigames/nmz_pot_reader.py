@@ -13,9 +13,9 @@ from typing  import Union
 import numpy as np
 from PIL import Image, ImageOps
 
-from core.tools import find_subimage
+from core import tools
 
-import core.ocr as ocr
+import core.ocr.custom as ocr
 
 
 # ────────────────────────────────────────────────────────── helpers ──
@@ -52,15 +52,10 @@ def read_stack(path_or_img: Union[str, Path, Image.Image]) -> str:
     Raises a ValueError if *nothing* is read.
     """
     img   = Image.open(path_or_img) if not isinstance(path_or_img, Image.Image) else path_or_img
-    mono  = _to_mask(img)
-
-
+    
+    number_img = tools.mask_colors(img, [(255,255,0), (255,0,0)],  tolerance=10)
     # Single text-line mode; whitelist digits only
-    txt = ocr.get_number(
-        mono,
-        font=ocr.FontChoice.RUNESCAPE,
-        preprocess=False
-    )
+    txt = ocr.read_location_numbers(number_img)
 
     if not txt and txt != 0:
         raise ValueError("No digits recognised – Tesseract returned an empty string.")
@@ -75,7 +70,7 @@ def absorption_value(sc: Image.Image) -> str:
 
     abs_img = Image.open('data/ui/nmz_abs.png')
 
-    match = find_subimage(
+    match = tools.find_subimage(
         sc, abs_img, min_scale=0.9, max_scale=1.1
     )
     

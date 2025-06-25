@@ -3,7 +3,7 @@ from core.input.mouse_control import random_double_click
 from core.tools import MatchResult, MatchShape
 from core import ocr
 from PIL import Image
-import core.nmz_pot_reader as nmz_pot_reader
+import core.minigames.nmz_pot_reader as nmz_pot_reader
 import threading
 import keyboard
 import random
@@ -131,6 +131,7 @@ def handle_absorption():
 
     
     ans = get_val()
+    print(f"Absorption value: {ans}")
 
     pots_to_drink = (min_absorption - ans) / 200
 
