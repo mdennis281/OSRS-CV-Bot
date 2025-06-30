@@ -956,9 +956,17 @@ class RuneLiteClient(GenericWindow):
             click_cnt=1,
             click_type=ClickType.LEFT,
             center_point=False,
+            center_point_variance=2 #pixels
         ):
         for _ in range(retry_hover):
-            point = match.get_center() if center_point else match.get_point_within()
+            if center_point:
+                point = match.get_center()
+                point = (
+                    point[0] + random.randint(-center_point_variance, center_point_variance),
+                    point[1] + random.randint(-center_point_variance, center_point_variance)
+                )
+            else:  
+                point = match.get_point_within()
             self.move_to(point,rand_move_chance=0)
             time.sleep(random.uniform(0.1, 0.2))
 
