@@ -218,7 +218,10 @@ class GenericWindow:
             new_y = random.randint(self.window.top, self.window.top + self.window.height)
 
         # Move the window to the new position
-        move_to(new_x, new_y)
+        try:
+            move_to(new_x, new_y)
+        except pyautogui.FailSafeException as e:
+            self.log.warning(f'Failed to move off window!! {e}')
 
     @timeit
     @control.guard
