@@ -744,7 +744,7 @@ class RuneLiteClient(GenericWindow):
 
         raise ValueError(f"Could not determine skilling state for substring: {substring}. No red or green pixels found in {img.size} image.")
         
-    def is_moving(self, sleep_between=.7, retry_cnt=2) -> bool:
+    def is_moving(self, sleep_between=.8, retry_cnt=2) -> bool:
         """
         Checks if the player is moving by comparing the 
         player's position at two different times.
