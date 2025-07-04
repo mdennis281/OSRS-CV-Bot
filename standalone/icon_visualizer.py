@@ -7,8 +7,8 @@ from io import BytesIO
 app = Flask(__name__)
 
 # Load the JSON data
-ICONS_PATH = Path(__file__).resolve().parent / "osrsbox-db-master" / "data" / "icons" / "icons-items-complete.json"
-ITEMS_PATH = Path(__file__).resolve().parent / "osrsbox-db-master" / "data" / "items" / "items-cache-data.json"
+ICONS_PATH = Path(__file__).resolve().parent.parent / "data" / "items" / "icons-items-complete.json"
+ITEMS_PATH = Path(__file__).resolve().parent.parent / "data" / "items" / "items-cache-data.json"
 
 with ICONS_PATH.open("r") as f:
     ICONS = json.load(f)
