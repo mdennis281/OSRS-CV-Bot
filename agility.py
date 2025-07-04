@@ -73,7 +73,9 @@ def click_tile(tile_color, action):
     try:
         client.smart_click_match(
             box, action,
-            retry_hover=3
+            retry_hover=3,
+            center_point=True,
+            center_point_variance=10
         )
         client.move_to(client.window_match)
     except Exception as e:
