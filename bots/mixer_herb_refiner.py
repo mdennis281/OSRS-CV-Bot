@@ -28,7 +28,9 @@ class BotConfig(BotConfigMixin):
     refiner_tile: RGBParam = RGBParam(0, 255, 0)  # Green
     #herb_option: StringParam = StringParam("Grimy lantadyme")  # aga
     #herb_option: StringParam = StringParam("Grimy kwuarm") # lye
-    herb_option: StringParam = StringParam("Grimy tarromin")  # mox
+    #herb_option: StringParam = StringParam("Grimy tarromin")  # mox
+    #herb_option: StringParam = StringParam("Grimy harralander")  # mox
+    herb_option: StringParam = StringParam("Grimy toadflax")  # mox
 
     # Optional configuration
     deposit_delay: RangeParam = RangeParam(0.5, 1.5)
