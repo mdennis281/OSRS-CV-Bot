@@ -180,6 +180,7 @@ class MasteringMixology():
         # validation
         while self.bot.client.is_moving():
             continue
+        time.sleep(random.uniform(0.4, .8))  # wait for mixer to settle
         empty = 'the mixing vessel is currently empty'
         if self.bot.client.is_text_in_chat(empty):
             if _retry > 0:
@@ -238,7 +239,7 @@ class MasteringMixology():
         m.end_y = m.start_y + 200
         return m
     
-    def get_orders(self):
+    def get_orders(self, _retry: int = 3) -> List['Order']:
         
         m = self.bot.client.find_in_window(HEADER)
         sc = self.bot.client.get_screenshot()
@@ -254,11 +255,19 @@ class MasteringMixology():
             o.width = 200
             o.height = 25
             o.end_x = o.end_x + 25 # it's off center
-            order = Order(
-                ingredients=self._get_order_ingredients(o.copy()),
-                action=self._get_order_action(o.copy()),
-                match=o
-            )
+            try:
+                order = Order(
+                    ingredients=self._get_order_ingredients(o.copy()),
+                    action=self._get_order_action(o.copy()),
+                    match=o
+                )
+            except ValueError as e:
+                self.log.error(f"Failed to create order from match {o}: {e}")
+                if _retry > 0:
+                    self.log.warning(f"Retrying to get orders, attempts left: {_retry - 1}")
+                    return self.get_orders(_retry - 1)
+                raise ValueError(f"Exhausted retries getting orders, last error: {e}")
+
             if not order.is_done(sc):
                 if order.ingredients not in self.ingredient_exclude:
                     orders.append(
@@ -278,9 +287,6 @@ class MasteringMixology():
                 self.log.info(f"Order {order.ingredients} already in inventory, marking as filled.")
                 order.in_inventory = True
                 existing.remove(order.ingredients)
-
-        # Sort orders so that RETORT actions are always last
-        orders = sorted(orders, key=lambda order: 1 if order.action == Action.RETORT else 0)
 
         return orders
 
