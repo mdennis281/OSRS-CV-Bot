@@ -67,7 +67,12 @@ class BotExecutor(Bot):
                 try:
                     # Start at the bank, then travel to mine
                     if not self.bank_items():
-                        self.log.error("Failed to bank items. Retrying...")
+                        self.log.error("Failed to bank items. Ensuring at right location")
+                        self.mover.execute_route(
+                            RouteParam([
+                                self.cfg.bank_to_mine.waypoints[0]
+                            ])
+                        )
                         self.consecutive_failures += 1
                         if self.consecutive_failures > self.cfg.max_retries.value:
                             raise RuntimeError("Too many consecutive banking failures")
