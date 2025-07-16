@@ -1,4 +1,3 @@
-
 from core.osrs_client import RuneLiteClient, ToolplaneTab
 from core.bank import BankInterface
 from core.item_db import ItemLookup
@@ -7,6 +6,7 @@ import threading
 import time
 import random
 import keyboard
+import pyautogui
 from typing import List
 
 
@@ -120,6 +120,9 @@ def ensure_door_open():
     
 
 def drop_items(items:List[str]=DROP) -> int:
+    sort_keep()
+    time.sleep(random.uniform(0.5, 1.5))
+    client.move_off_window()
     matches = client.get_inv_items(items,min_confidence=.97)
     if matches:
         try:
@@ -136,8 +139,41 @@ def drop_items(items:List[str]=DROP) -> int:
     return len(matches)
 
 
+def sort_keep():
+    keep_matches = client.get_inv_items(KEEP, min_confidence=.97)
+    drop_matches = client.get_inv_items(DROP, min_confidence=.97)
+
+    # Sort keep matches bottom-right first, and drop matches top-left first
+    keep_matches.sort(key=lambda m: (-m.start_y, -m.start_x))
+    drop_matches.sort(key=lambda m: (m.start_y, m.start_x))
+
+    # Iterate through keep matches and swap with drop matches above or to the left
+    for keep_match in keep_matches:
+        for drop_match in drop_matches:
+            # Ensure drop is either above or in the same row but to the left
+            if drop_match.start_y < keep_match.start_y or (
+                drop_match.start_y == keep_match.start_y and drop_match.start_x < keep_match.start_x
+            ):
+                swap_items(keep_match, drop_match)
+                drop_matches.remove(drop_match)  # Remove swapped drop match
+                break
 
 
+def swap_items(m1: tools.MatchResult, m2: tools.MatchResult):
+    """Swap two items in the inventory."""
+    if not m1 or not m2:
+        print("Invalid matches for swapping.")
+        return
+    
+    try:
+        client.move_to(m1.get_point_within())
+        time.sleep(random.uniform(0.1, 0.3))
+        pyautogui.mouseDown(button='left')
+        time.sleep(random.uniform(0.1, 0.3))
+        client.move_to(m2.get_center(), rand_move_chance=0)
+        time.sleep(random.uniform(0.1, 0.3))
+    finally:
+        pyautogui.mouseUp(button='left')
 
 
 
