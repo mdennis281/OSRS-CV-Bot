@@ -497,6 +497,7 @@ class RuneLiteClient(GenericWindow):
             tab: ToolplaneTab = ToolplaneTab.INVENTORY,
             min_confidence=0.97
         ):
+        self.get_screenshot()
         top_crop = 13
         match = self.find_item(
             item_identifier,
@@ -507,20 +508,25 @@ class RuneLiteClient(GenericWindow):
         match.start_y = match.start_y - 5
         match.start_x = match.start_x - 3
         match.end_y = match.start_y + 15
-        match.end_x = match.start_x + 30
+        match.end_x = match.start_x + 33
+
+        sc = match.crop_in(self.screenshot)
+        num_img = tools.mask_colors(sc, [
+            (255, 255, 0), # < 100k
+            # TODO: actually handle these
+            # (255,255,255), # > 100k
+            # (0, 255, 128)  # > 10M
+        ], tolerance=5)
 
         try:
-            return match.extract_number(
-                self.screenshot,
-                ocr.FontChoice.RUNESCAPE_SMALL
+            return ocr.get_number(
+                num_img,
+                ocr.FontChoice.RUNESCAPE_SMALL,
             )
-            
-        except Exception as e: 
+        except Exception as e:
             self.log.error(f'Failed to get count for item: {item_identifier} - {str(e)}')
             match.debug_draw(self.screenshot).show()
             return 0
-            
-        
          
     
             
