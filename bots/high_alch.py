@@ -19,7 +19,7 @@ class BotConfig(BotConfigMixin):
 
 
     alch_item: IntParam = IntParam(1396)  # Default to water battlestaff (noted)
-    chance_change_point: FloatParam = FloatParam(0.01)
+    chance_change_point: FloatParam = FloatParam(0.05)
 
     # makes it more human-like
     tab_check_range = RangeParam(.5,1.75)
