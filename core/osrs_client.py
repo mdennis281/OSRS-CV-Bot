@@ -91,7 +91,7 @@ class GenericWindow:
         self.window = windows[0] if windows else None
         return self.window
 
-    def start_resize_watch_polling(self, on_resize=None, interval=0.2):
+    def start_resize_watch_polling(self, on_resize=None, interval=0.5):
         """
         Starts a thread to monitor window resizing.
 
@@ -102,19 +102,25 @@ class GenericWindow:
         Returns:
             threading.Event: Event to stop the polling.
         """
+        def _get_window_position():
+            return [
+                (self.window.width, self.window.height),
+                (self.window.left, self.window.top)
+            ]
         def _loop():
+            last = _get_window_position()
             while not stop_evt.is_set():
                 if self.is_open:
-                    rect = (self.window.width, self.window.height)
-                    if rect != last[0]:
-                        last[0] = rect
+                    position = _get_window_position()
+                    if position != last:
+                        last = position
                         if on_resize:
                             on_resize()
                         else:
                             self.on_resize()
                 stop_evt.wait(interval)
 
-        stop_evt, last = threading.Event(), [(self.window.width, self.window.height)]
+        stop_evt = threading.Event()
         threading.Thread(target=_loop, daemon=True).start()
         return stop_evt  # Caller can call .set() to stop
 
@@ -758,6 +764,7 @@ class RuneLiteClient(GenericWindow):
 
         raise ValueError(f"Could not determine skilling state for substring: {substring}. No red or green pixels found in {img.size} image.")
         
+    @control.guard
     def is_moving(self, sleep_between=.8, retry_cnt=2) -> bool:
         """
         Checks if the player is moving by comparing the 
@@ -975,7 +982,7 @@ class RuneLiteClient(GenericWindow):
         ):
         for sector in parent_sectors:
                 match = match.transform(sector.start_x,sector.start_y)
-                
+
         for _ in range(retry_hover):
             if center_point:
                 point = match.get_center()

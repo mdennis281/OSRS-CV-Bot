@@ -4,6 +4,7 @@ Provides window manipulation functionality across Windows, macOS, and Linux.
 """
 
 import sys
+from turtle import title
 import pyautogui
 import time
 import keyboard
@@ -112,14 +113,45 @@ class WindowsWindow:
     def __init__(self, win32_window):
         # Copy all attributes from the original window
         self.win32_window = win32_window
-        self.title = win32_window.title
-        self.left = win32_window.left
-        self.top = win32_window.top
-        self.width = win32_window.width
-        self.height = win32_window.height
-        self.right = win32_window.right
-        self.bottom = win32_window.bottom
-        self.isActive = win32_window.isActive
+
+    @property
+    def top(self):
+        """Return the top coordinate of the window"""
+        return self.win32_window.top
+    @property
+    def left(self):
+        """Return the left coordinate of the window"""
+        return self.win32_window.left
+    
+    @property
+    def right(self):
+        """Return the right coordinate of the window"""
+        return self.win32_window.right
+    
+    @property
+    def bottom(self):
+        """Return the bottom coordinate of the window"""
+        return self.win32_window.bottom
+    
+    @property
+    def width(self):
+        """Return the width of the window"""
+        return self.win32_window.width
+    
+    @property
+    def height(self):
+        """Return the height of the window"""
+        return self.win32_window.height
+    
+    @property
+    def title(self):
+        """Return the title of the window"""
+        return self.win32_window.title
+    
+    @property
+    def isActive(self):
+        """Return True if this window is the active window"""
+        return self.win32_window.isActive
     
     def activate(self):
         """Activate the window"""
@@ -180,16 +212,54 @@ class MacWindow:
     
     def __init__(self, app, title):
         self.app = app
-        self.title = title
-        # Get screen size as a fallback
+        self._title = title
+    
+    @property
+    def title(self):
+        """Return the title of the window"""
+        return self._title
+    
+    @property
+    def width(self):
+        """Return the width of the window"""
+        # Get screen size as a fallback for macOS
         screen = pyautogui.size()
-        self.width = screen[0]
-        self.height = screen[1]
-        self.left = 0
-        self.top = 0
-        self.right = self.left + self.width
-        self.bottom = self.top + self.height
-        self.isActive = app.isActive()
+        return screen[0]
+    
+    @property
+    def height(self):
+        """Return the height of the window"""
+        # Get screen size as a fallback for macOS
+        screen = pyautogui.size()
+        return screen[1]
+    
+    @property
+    def left(self):
+        """Return the left coordinate of the window"""
+        return 0
+    
+    @property
+    def top(self):
+        """Return the top coordinate of the window"""
+        return 0
+    
+    @property
+    def right(self):
+        """Return the right coordinate of the window"""
+        return self.left + self.width
+    
+    @property
+    def bottom(self):
+        """Return the bottom coordinate of the window"""
+        return self.top + self.height
+    
+    @property
+    def isActive(self):
+        """Return True if this window is the active app"""
+        try:
+            return self.app.isActive()
+        except Exception:
+            return False
     
     def activate(self):
         """Activate the window"""
@@ -281,65 +351,108 @@ class LinuxWindow:
     
     def __init__(self, window, title, display, Xlib):
         self.window = window
-        self.title = title
+        self._title = title
         self.display = display
         self.Xlib = Xlib  # Store Xlib module reference
-        
-        # Get geometry
-        geom = window.get_geometry()
-        self.width = geom.width
-        self.height = geom.height
-
-        # Correctly unpack translate_coords tuple (x, y, child)
-        try:
-            x, y, _ = window.translate_coords(self.root, 0, 0)
-            self.left = x
-            self.top  = y
-        except Exception:
-            # fallback to summing parent offsets
-            self._get_window_position()
-
-        # Ensure values are in valid range
-        screen_size = pyautogui.size()
-        self.left = max(0, min(screen_size[0] - 1, self.left))
-        self.top = max(0, min(screen_size[1] - 1, self.top))
-            
-        self.right = self.left + self.width
-        self.bottom = self.top + self.height
-        
-        # Check if window is active
-        self.isActive = self._is_active()
+        self.root = self.display.screen().root
     
-    def _get_window_position(self):
-        """
-        Alternative method to get window position by traversing the window tree.
-        This calculates the absolute position of the client area.
-        """
+    @property
+    def title(self):
+        """Return the title of the window"""
+        return self._title
+    
+    @property
+    def width(self):
+        """Return the width of the window"""
         try:
-            # This logic is adapted from pygetwindow's X11 implementation.
-            # It traverses up the window tree, summing the geometry offsets.
+            geom = self.window.get_geometry()
+            return geom.width
+        except Exception:
+            # Fallback to screen width
+            return pyautogui.size()[0]
+    
+    @property
+    def height(self):
+        """Return the height of the window"""
+        try:
+            geom = self.window.get_geometry()
+            return geom.height
+        except Exception:
+            # Fallback to screen height
+            return pyautogui.size()[1]
+    
+    @property
+    def left(self):
+        """Return the left coordinate of the window"""
+        try:
+            # Try translate_coords first
+            x, y, _ = self.window.translate_coords(self.root, 0, 0)
+            return max(0, min(pyautogui.size()[0] - 1, x))
+        except Exception:
+            # Fallback to traversing window tree
+            return self._get_window_x_position()
+    
+    @property
+    def top(self):
+        """Return the top coordinate of the window"""
+        try:
+            # Try translate_coords first
+            x, y, _ = self.window.translate_coords(self.root, 0, 0)
+            return max(0, min(pyautogui.size()[1] - 1, y))
+        except Exception:
+            # Fallback to traversing window tree
+            return self._get_window_y_position()
+    
+    @property
+    def right(self):
+        """Return the right coordinate of the window"""
+        return self.left + self.width
+    
+    @property
+    def bottom(self):
+        """Return the bottom coordinate of the window"""
+        return self.top + self.height
+    
+    @property
+    def isActive(self):
+        """Return True if this window is the active window"""
+        return self._is_active()
+    
+    def _get_window_x_position(self):
+        """Get window X position by traversing the window tree"""
+        try:
             geom = self.window.get_geometry()
             x = geom.x
+            
+            parent = self.window.query_tree().parent
+            
+            while parent and parent.id != self.root.id:
+                parent_geom = parent.get_geometry()
+                x += parent_geom.x
+                parent = parent.query_tree().parent
+            
+            return max(0, min(pyautogui.size()[0] - 1, x))
+        except Exception as e:
+            log.error(f"Error getting window X position: {e}")
+            return 0
+    
+    def _get_window_y_position(self):
+        """Get window Y position by traversing the window tree"""
+        try:
+            geom = self.window.get_geometry()
             y = geom.y
             
             parent = self.window.query_tree().parent
-            screen_root = self.display.screen().root
             
-            while parent and parent.id != screen_root.id:
+            while parent and parent.id != self.root.id:
                 parent_geom = parent.get_geometry()
-                x += parent_geom.x
                 y += parent_geom.y
-                
-                # Move to the next parent in the hierarchy
                 parent = parent.query_tree().parent
-
-            self.left = x
-            self.top = y
+            
+            return max(0, min(pyautogui.size()[1] - 1, y))
         except Exception as e:
-            log.error(f"Error getting window position: {e}")
-            # Safe fallback values
-            self.left = 0
-            self.top = 0
+            log.error(f"Error getting window Y position: {e}")
+            return 0
     
     def _is_active(self):
         """Check if the window is active"""
