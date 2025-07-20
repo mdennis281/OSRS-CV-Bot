@@ -315,8 +315,13 @@ class GenericWindow:
     @control.guard
     def move_to(self,match: MatchResult | Tuple[int], 
                 rand_move_chance:float=0.4,
-                translated=False):
+                translated=False, parent_sectors: List[MatchResult]=[]):
+        
+        
+
         if isinstance(match, MatchResult):
+            for sector in parent_sectors:
+                match = match.transform(sector.start_x,sector.start_y)
             x,y = match.get_point_within()
         else:
             x,y = match
@@ -965,8 +970,12 @@ class RuneLiteClient(GenericWindow):
             click_cnt=1,
             click_type=ClickType.LEFT,
             center_point=False,
-            center_point_variance=2 #pixels
+            center_point_variance=2, #pixels
+            parent_sectors: List[MatchResult] = []
         ):
+        for sector in parent_sectors:
+                match = match.transform(sector.start_x,sector.start_y)
+                
         for _ in range(retry_hover):
             if center_point:
                 point = match.get_center()
