@@ -95,7 +95,7 @@ def mine_ore():
 
 def deposit_inventory():
     client.smart_click_tile(
-        DEPOSIT_TILE, 'deposit'
+        DEPOSIT_TILE, ['deposit','bank','posit']
     )
     for _ in range(6):
         if terminate: return
