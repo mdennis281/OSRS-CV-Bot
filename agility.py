@@ -30,7 +30,7 @@ GRACE = (255,0,255)
 ACTIONS = [
     'jump', 'climb', 'vault', 'gap', 'cross', 
     'rope','wall','-up', 'grab', 'leap',
-    'cross', 'monkey', '-on'
+    'cross', 'monkey', '-on', 'hurdle'
 ]
 FAIL_MAX = 10
 SLEEP_CHANCE = .005
