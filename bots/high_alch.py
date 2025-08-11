@@ -19,7 +19,7 @@ class BotConfig(BotConfigMixin):
 
 
     alch_item: IntParam = IntParam(1396)  # Default to water battlestaff (noted)
-    chance_change_point: FloatParam = FloatParam(0.05)
+    chance_change_point: FloatParam = FloatParam(0.08)
 
     # makes it more human-like
     tab_check_range = RangeParam(.5,1.75)
@@ -85,7 +85,9 @@ class BotExecutor(Bot):
     
     def get_overlap_point(self):
         try:
+            
             self.overlap_point = self.overlap.get_point_within()
+            self.log.info(f'New Overlap point: {self.overlap_point}')
         except AttributeError as e:
             raise RuntimeError('Make sure the item and high alch are on top of each other')
         
