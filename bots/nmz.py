@@ -53,6 +53,7 @@ class BotConfig(BotConfigMixin):
         RangeParam(30, 300),  # break duration range in seconds
         FloatParam(0.01)     # break chance
     )
+    chance_move_off_window: FloatParam = FloatParam(0.65)  # Chance to move off window during AFK mode
 
 class BotExecutor(Bot):
     def __init__(self, config: BotConfig, user=''):
@@ -118,22 +119,33 @@ class BotExecutor(Bot):
     @control.guard
     def flick_routine(self):
         """Main flicking routine that handles prayer, health, and absorption"""
+        actions = []
+
         if self.cfg.prayer_flick.value:
-            self.handle_prayer_flick()
+            actions.append(self.handle_prayer_flick)
         
         if self.cfg.manage_health.value:
-            self.handle_health()
-            
+            actions.append(self.handle_health)
+        
         if self.cfg.manage_absorption.value:
-            self.handle_absorption()
-            
+            actions.append(self.handle_absorption)
+
+        # Shuffle the actions to execute them in random order
+        random.shuffle(actions)
+
+        for action in actions:
+            action()
+
         # Ensure prayer is in correct state
         if self.cfg.prayer_flick.value:
             self.ensure_prayer_state(False)
 
         # Move off window if in AFK mode
         if self.cfg.afk_mode.value:
-            self.client.move_off_window()
+            # not every time
+            if random.random() < self.cfg.chance_move_off_window.value:
+                self.client.move_off_window()
+
 
     @control.guard
     def handle_prayer_flick(self):
