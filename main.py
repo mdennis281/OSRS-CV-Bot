@@ -1,4 +1,4 @@
-from bots.high_alch import BotConfig, BotExecutor
+from bots.nmz import BotConfig, BotExecutor
 
 
 def main():
