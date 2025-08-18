@@ -863,7 +863,8 @@ class RuneLiteClient(GenericWindow):
     def get_inv_items(self, 
             items: List[str | int],min_confidence=0.97,
             x_sort: bool = None,
-            y_sort: bool = None
+            y_sort: bool = None,
+            do_sort: bool = True
         ) -> List[MatchResult]:
         self.click_toolplane(ToolplaneTab.INVENTORY)
         sc = self.get_screenshot()
@@ -884,16 +885,18 @@ class RuneLiteClient(GenericWindow):
             )
         if not matches:
             return []
-        if x_sort is None: x_sort = random.choice([True, False])
-        if y_sort is None: y_sort = random.choice([True, False])
-        matches.sort(
-            key=lambda x: x.start_x, 
-            reverse=x_sort
-        )
-        matches.sort(
-            key=lambda x: x.start_y, 
-            reverse=y_sort
-        )
+
+        if do_sort:
+            if x_sort is None: x_sort = random.choice([True, False])
+            if y_sort is None: y_sort = random.choice([True, False])
+            matches.sort(
+                key=lambda x: x.start_x,
+                reverse=x_sort
+            )
+            matches.sort(
+                key=lambda x: x.start_y,
+                reverse=y_sort
+            )
         matches = [m.transform(tp.start_x,tp.start_y) for m in matches]
         return matches
 
