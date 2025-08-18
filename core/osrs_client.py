@@ -124,6 +124,12 @@ class GenericWindow:
         threading.Thread(target=_loop, daemon=True).start()
         return stop_evt  # Caller can call .set() to stop
 
+    def on_resize(self):
+        """
+        Default resize handler. Can be overridden by subclasses.
+        """
+        self.log.info('On resize called, but no handler defined.')
+
     @property
     def screenshot(self) -> Image.Image:
         """
