@@ -181,8 +181,15 @@ class BotExecutor(Bot):
             if not health:
                 self.log.warning("Could not read health stat")
                 return
+            
+            if health > 50 and self.cfg.manage_overload.value:
+                self.log.info('Health is quite high.. did overload not work?')
+                self.handle_overload()
+                health = self.client.get_minimap_stat(MinimapElement.HEALTH)
                 
             if health > self.cfg.target_health.value:
+                
+                    
                 self.log.info(f"Health is {health}, using rock cake to reduce to {self.cfg.target_health.value}")
                 
                 clicks_needed = min(
