@@ -20,7 +20,7 @@ class BotConfig(BotConfigMixin):
     # Main feature toggles
     manage_health: BooleanParam = BooleanParam(True)
     manage_absorption: BooleanParam = BooleanParam(True)
-    manage_overload: BooleanParam = BooleanParam(False)
+    manage_overload: BooleanParam = BooleanParam(True)
     prayer_flick: BooleanParam = BooleanParam(True)
     afk_mode: BooleanParam = BooleanParam(True)
 
@@ -301,18 +301,25 @@ class BotExecutor(Bot):
             now = time.time()
             time_since_last = (now - self.last_overload) / 60
             if time_since_last < 4:
-                return
+                if self.client.get_minimap_stat(MinimapElement.HEALTH) < 51:
+                    return
+                self.log.info('Health is above 50 but overload timeout hasn\'t expired.')
+                time_since_last = 5
             overload = self.get_smallest_overload()
             if not overload:
                 self.log.warning("No overload potion found in inventory, disabling")
                 self.cfg.manage_overload.value = False
                 return
-                
+
             # if less than 1 minute until overload exp, wait here
             if time_since_last < 5:
                 self.log.info("Overload potion is about to expire, waiting...")
                 time_until_overload_exp = int((5 - time_since_last) * 60) + 1
                 time.sleep(time_until_overload_exp)
+            
+            if self.client.get_minimap_stat(MinimapElement.HEALTH) < 51:
+                self.log.info("Health is below 51, not drinking overload")
+                return
             
             
             self.log.info('Drinking Overload')
