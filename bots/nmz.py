@@ -20,7 +20,7 @@ class BotConfig(BotConfigMixin):
     # Main feature toggles
     manage_health: BooleanParam = BooleanParam(True)
     manage_absorption: BooleanParam = BooleanParam(True)
-    manage_overload: BooleanParam = BooleanParam(True)
+    manage_overload: BooleanParam = BooleanParam(False)
     prayer_flick: BooleanParam = BooleanParam(True)
     afk_mode: BooleanParam = BooleanParam(True)
 
