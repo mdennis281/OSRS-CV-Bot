@@ -6,6 +6,7 @@ import keyboard
 from core.input.mouse_control import ClickType
 import time
 import random
+from typing import List
 
 # load into memory now for faster loads
 BANK_BR = Image.open('data/ui/bank-bottom-right.png')
@@ -13,6 +14,7 @@ BANK_TL = Image.open('data/ui/bank-top-left.png')
 BANK_DEPO_INV = Image.open('data/ui/bank-deposit-inv.png')
 BANK_SEARCH = Image.open('data/ui/bank-search.png')
 BANK_CLOSE = Image.open('data/ui/close-ui-element.png')
+BANK_TAB = Image.open('data/ui/bank-tab.png')
 
 class BankInterface:
     def __init__(self,client:RuneLiteClient,itemdb:ItemLookup):
@@ -85,7 +87,27 @@ class BankInterface:
                     self.last_custom_quanity = amount
 
                 
-    
+    def get_bank_tabs(self) -> List[tools.MatchResult]:
+        if not self.is_open: raise ValueError('Bank is not open')
+        
+        matches = tools.find_subimages(
+            self.bank_match.crop_in(self.client.get_screenshot()),
+            BANK_TAB,
+            min_scale=1,max_scale=1,
+            min_confidence=.99
+        )
+        final = []
+        
+        for match in matches:
+            final.append(
+                match.transform(
+                    self.bank_match.start_x,
+                    self.bank_match.start_y
+                )
+            )
+
+        return final
+
     def withdraw(self, item_id:str|int, amount:int=1):
         """
         Withdraw an item from the bank.
