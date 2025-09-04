@@ -870,9 +870,11 @@ class RuneLiteClient(GenericWindow):
             items: List[str | int],min_confidence=0.97,
             x_sort: bool = None,
             y_sort: bool = None,
-            do_sort: bool = True
+            do_sort: bool = True,
+            verify_tab: bool = True
         ) -> List[MatchResult]:
-        self.click_toolplane(ToolplaneTab.INVENTORY)
+        if verify_tab:
+            self.click_toolplane(ToolplaneTab.INVENTORY)
         sc = self.get_screenshot()
         tp = self.sectors.toolplane
         sc = tp.crop_in(sc)
@@ -962,11 +964,11 @@ class RuneLiteClient(GenericWindow):
                     sc = match.remove_from(sc)
             if mult + 1 >= retry_match and retry_match > 1:
                 self.move_off_window()
-            match = find_color_box(
-                sc,tile_color,
-                tol=40+(10*mult)
-            )
             try:
+                match = find_color_box(
+                    sc,tile_color,
+                    tol=40+(10*mult)
+                )
                 self.smart_click_match(
                     match,
                     hover_text,
