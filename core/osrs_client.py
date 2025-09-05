@@ -555,7 +555,8 @@ class RuneLiteClient(GenericWindow):
             click_cnt: int = 1,
             min_confidence=0.97,
             min_click_interval: float = 0.3,
-            crop: Tuple[int] = None
+            crop: Tuple[int] = None,
+            center: bool = False
     ):
         
         match = self.find_item(
@@ -565,6 +566,7 @@ class RuneLiteClient(GenericWindow):
             crop=crop
         )
         
+        if center: match = match.get_center()
             
         self.click(
             match, click_cnt=click_cnt, 
