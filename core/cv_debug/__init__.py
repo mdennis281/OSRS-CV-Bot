@@ -117,13 +117,13 @@ _app_thread: Optional[threading.Thread] = None
 _worker_thread: Optional[threading.Thread] = None
 
 def _create_app():
-    from flask import Flask, jsonify, Response
+    from flask import Flask, jsonify, Response, request
 
     app = Flask(__name__)
 
     @app.get("/")
     def index():
-        # Minimal HTML with SSE auto-update and initial fetch
+        # Minimal HTML with polling (IDs) + fetch missing items only; no full re-render
         return f"""
 <!doctype html>
 <html>
@@ -146,18 +146,19 @@ def _create_app():
 </head>
 <body>
 <header>
-  <strong>CV Debug</strong> – showing most recent {_MAX_ITEMS} matches (auto-updating)
+  <strong>CV Debug</strong> – showing most recent {_MAX_ITEMS} matches (incremental updates)
 </header>
 <div class="wrap">
   <div id="grid" class="grid"></div>
 </div>
 <script>
 const grid = document.getElementById('grid');
-let items = [];
+const MAX = {_MAX_ITEMS};
+const known = new Set();
 
-function render() {{
-  grid.innerHTML = items.map(it => `
-    <div class="card">
+function cardHtml(it) {{
+  return `
+    <div class="card" data-id="${{it.id}}">
       <div class="meta">
         <span class="tag">t=${{it.timestamp}}</span>
         <span class="tag">conf=${{it.confidence}}</span>
@@ -168,29 +169,48 @@ function render() {{
         <div><img src="${{it.images.template}}" alt="template"></div>
         <div><img src="${{it.images.parent_annotated}}" alt="annotated parent"></div>
       </div>
-    </div>
-  `).join('');
+    </div>`;
 }}
 
-fetch('/api/recent').then(r => r.json()).then(d => {{
-  items = d.items || [];
-  render();
-}});
+async function fetchRecentIds() {{
+  const r = await fetch('/api/recent_ids');
+  const d = await r.json();
+  return d.ids || [];
+}}
 
-const es = new EventSource('/stream');
-es.onmessage = (ev) => {{
+async function fetchItemsByIds(ids) {{
+  if (!ids.length) return [];
+  const r = await fetch('/api/items?ids=' + encodeURIComponent(ids.join(',')));
+  const d = await r.json();
+  return d.items || [];
+}}
+
+async function loadMissing(ids) {{
+  const missing = ids.filter(id => !known.has(id));
+  if (!missing.length) return;
+  const items = await fetchItemsByIds(missing);
+  // Items are returned in the same order as requested ids (newest first)
+  for (const it of items) {{
+    known.add(it.id);
+    grid.insertAdjacentHTML('afterbegin', cardHtml(it));
+  }}
+  // Trim to MAX
+  while (grid.children.length > MAX) {{
+    grid.removeChild(grid.lastElementChild);
+  }}
+}}
+
+async function refresh() {{
   try {{
-    const data = JSON.parse(ev.data);
-    if (data.type === 'match' && data.item) {{
-      items.unshift(data.item);
-      items = items.slice(0, { _MAX_ITEMS });
-      render();
-    }}
-  }} catch(e) {{}}
-}};
-es.onerror = () => {{
-  // SSE will retry automatically; nothing to do
-}};
+    const ids = await fetchRecentIds();
+    await loadMissing(ids);
+  }} catch (e) {{ /* ignore */ }}
+}}
+
+// Initial load
+refresh();
+// Poll every 1.5s
+setInterval(refresh, 1500);
 </script>
 </body>
 </html>
@@ -200,6 +220,26 @@ es.onerror = () => {{
     def api_recent():
         with _lock:
             return jsonify({"items": list(_items)})
+
+    @app.get("/api/recent_ids")
+    def api_recent_ids():
+        with _lock:
+            ids = [it["id"] for it in _items]
+        return jsonify({"ids": ids})
+
+    @app.get("/api/items")
+    def api_items():
+        ids_param = request.args.get("ids", "").strip()
+        if not ids_param:
+            return jsonify({"items": []})
+        try:
+            req_ids = [int(x) for x in ids_param.split(",") if x]
+        except ValueError:
+            return jsonify({"items": []})
+        with _lock:
+            by_id = {it["id"]: it for it in _items}
+            items = [by_id[i] for i in req_ids if i in by_id]
+        return jsonify({"items": items})
 
     @app.get("/stream")
     def stream():
