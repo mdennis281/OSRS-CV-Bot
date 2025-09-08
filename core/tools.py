@@ -7,6 +7,8 @@ from core import ocr
 from typing import Tuple, Optional, List
 from core.region_match import MatchResult, ShapeResult, MatchShape
 from functools import wraps
+# Add this import (safe even if not enabled; enqueue is a no-op until enable() is called)
+from core import cv_debug
 
 
 
@@ -78,6 +80,12 @@ def find_subimage(parent: Image.Image,
 
     if best.confidence < 0:
         raise ValueError("No valid match found (template never fit inside parent).")
+
+    # Non-blocking debug enqueue; does nothing unless cv_debug.enable() was called.
+    try:
+        cv_debug.enqueue_match(parent, template, best)
+    except Exception:
+        pass
 
     return best
 

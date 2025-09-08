@@ -14,6 +14,9 @@ from core.osrs_client import ToolplaneTab
 import random
 import time
 
+from core import cv_debug
+cv_debug.enable()
+
 
 
 
@@ -77,7 +80,9 @@ def do_fish_from_house():
     bot.client.smart_click_tile(
         FISH_TILE,
         ['fish', 'spot'],
-        filter_ui=True
+        filter_ui=True,
+        retry_hover=6,
+        retry_match=6
     )
     while bot.client.is_moving(): continue
     time.sleep(random.uniform(3,1))
