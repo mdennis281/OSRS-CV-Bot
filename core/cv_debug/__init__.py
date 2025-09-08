@@ -2,6 +2,8 @@ import threading
 import time
 import json
 import base64
+import logging
+import click
 import io
 from typing import Optional, Dict, Any, Tuple
 from collections import deque
@@ -10,6 +12,8 @@ from queue import Queue, Full, Empty
 from PIL import Image
 
 from core.region_match import MatchResult
+
+
 
 # Runtime state
 _enabled = False
@@ -311,3 +315,30 @@ def disable() -> None:
     """Optional: stop accepting new items; existing threads remain daemonized."""
     global _enabled
     _enabled = False
+
+
+def disable_flask_logging() -> None:
+    """
+    Disable Flask and Werkzeug logging output.
+
+    Overrides click's echo and secho functions to suppress output and
+    sets Werkzeug's logger level to ERROR to reduce log verbosity.
+    """
+    def override_click_logging():
+        # pylint: disable=unused-argument
+        def secho(text, file=None, nl=None, err=None, color=None, **styles):
+            pass
+        # pylint: disable=unused-argument
+
+        def echo(text, file=None, nl=None, err=None, color=None, **styles):
+            pass
+
+        click.echo = echo
+        click.secho = secho
+    werkzeug_log = logging.getLogger('werkzeug')
+    werkzeug_log.setLevel(logging.ERROR)
+
+    override_click_logging()
+
+
+disable_flask_logging()
