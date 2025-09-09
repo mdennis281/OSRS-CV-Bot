@@ -12,6 +12,9 @@ import math
 
 control = ScriptControl()
 
+# a little over 5 because racing condition
+OVERLOAD_LEN_MIN = 5.1
+
 class BotConfig(BotConfigMixin):
     # Configuration parameters
     name: str = "NMZ Bot"
@@ -304,7 +307,7 @@ class BotExecutor(Bot):
                 if self.client.get_minimap_stat(MinimapElement.HEALTH) < 51:
                     return
                 self.log.info('Health is above 50 but overload timeout hasn\'t expired.')
-                time_since_last = 5
+                time_since_last = OVERLOAD_LEN_MIN
             overload = self.get_smallest_overload()
             if not overload:
                 self.log.warning("No overload potion found in inventory, disabling")
@@ -312,9 +315,9 @@ class BotExecutor(Bot):
                 return
 
             # if less than 1 minute until overload exp, wait here
-            if time_since_last < 5:
+            if time_since_last < OVERLOAD_LEN_MIN:
                 self.log.info("Overload potion is about to expire, waiting...")
-                time_until_overload_exp = int((5 - time_since_last) * 60) + 1
+                time_until_overload_exp = int((OVERLOAD_LEN_MIN - time_since_last) * 60) + 1
                 time.sleep(time_until_overload_exp)
             
             if self.client.get_minimap_stat(MinimapElement.HEALTH) < 51:
