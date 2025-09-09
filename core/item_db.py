@@ -1,6 +1,7 @@
 import json
 from dataclasses import dataclass
 from typing import Dict, Optional, Any
+from core.logger import get_logger
 from PIL import Image
 from io import BytesIO
 import base64
@@ -46,9 +47,12 @@ class ItemLookup:
 
     def __init__(self):
         if not hasattr(self, "_items_by_id"):
+            self.log = get_logger('ItemLookup')
+            self.log.info("Initializing ItemLookup...")
             self._items_by_id: Dict[int, Item] = {}
             self._items_by_name: Dict[str, Item] = {}
             self._load_data()
+            self.log.info(f"Loaded {len(self._items_by_id)} items into cache.")
 
     def _load_data(self):
         """
@@ -61,12 +65,24 @@ class ItemLookup:
             with open("data/items/icons-items-complete.json", "r") as f:
                 icons_data = json.load(f)
 
+            # Import here to avoid circulars at module import time
+            from core.tools import base64_to_image, crop_transparent_border, image_to_base64
 
             for item in items_data.values():
                 # Filter out duplicates: only include items with linked_id_item=None and linked_id_placeholder!=None
                 if (item["linked_id_item"] is None and item["linked_id_placeholder"] is not None) or item["id"] not in self._items_by_id.keys():
                     icon_b64 = icons_data.get(str(item["id"]))
-                    
+
+                    # Crop transparent borders if icon exists
+                    if icon_b64:
+                        try:
+                            img = base64_to_image(icon_b64)
+                            cropped = crop_transparent_border(img)
+                            icon_b64 = image_to_base64(cropped, fmt="PNG")
+                        except Exception as e:
+                            # Keep original icon if something goes wrong, but log once
+                            self.log.debug(f"Icon crop failed for item {item['id']} - {item['name']}: {e}")
+
                     # Create an Item dataclass
                     item_obj = Item(
                         id=item["id"],

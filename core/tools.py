@@ -9,6 +9,8 @@ from core.region_match import MatchResult, ShapeResult, MatchShape
 from functools import wraps
 # Add this import (safe even if not enabled; enqueue is a no-op until enable() is called)
 from core import cv_debug
+from io import BytesIO
+import base64
 
 
 
@@ -423,3 +425,45 @@ def seconds_to_hms(total_seconds: float | int) -> str:
     minutes, seconds = divmod(remainder, 60)
 
     return f"{hours:02}:{minutes:02}:{seconds:02}"
+
+
+# ───────────────────────────────────────────────────────────────────────
+# New utilities: crop transparent borders and (de)serialization helpers
+# ───────────────────────────────────────────────────────────────────────
+
+def crop_transparent_border(img: Image.Image, padding: int = 0) -> Image.Image:
+    """
+    Remove fully transparent rows/columns around an image.
+    A pixel is considered transparent if alpha == 0. Padding (in px) can
+    be added back around the crop. Returns the cropped image (RGBA).
+    """
+    if img.mode != "RGBA":
+        img = img.convert("RGBA")
+
+    alpha = img.split()[-1]
+    bbox = alpha.getbbox()  # bounding box of non-zero alpha
+    if not bbox:
+        # Entire image is fully transparent; return as-is
+        return img
+
+    left, top, right, bottom = bbox
+    if padding:
+        left = max(0, left - padding)
+        top = max(0, top - padding)
+        right = min(img.width, right + padding)
+        bottom = min(img.height, bottom + padding)
+
+    return img.crop((left, top, right, bottom))
+
+
+def image_to_base64(img: Image.Image, fmt: str = "PNG") -> str:
+    """Encode a PIL Image to a base64 string (without data URI prefix)."""
+    buf = BytesIO()
+    img.save(buf, format=fmt)
+    return base64.b64encode(buf.getvalue()).decode("ascii")
+
+
+def base64_to_image(b64: str) -> Image.Image:
+    """Decode a base64 image string (no data URI) to a PIL Image."""
+    data = base64.b64decode(b64)
+    return Image.open(BytesIO(data))
