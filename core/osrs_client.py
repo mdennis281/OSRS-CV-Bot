@@ -417,7 +417,10 @@ class RuneLiteClient(GenericWindow):
     @timeit
     def click_minimap(self, element: MinimapElement, click_cnt:int=1):
         match: MatchResult = getattr(self.minimap, element.value)
-        self.click(match, click_cnt=click_cnt)
+        self.click(
+            match, click_cnt=click_cnt,
+            after_click_settle_chance=1
+        )
 
     
     @timeit    
