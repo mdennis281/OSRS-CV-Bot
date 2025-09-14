@@ -252,7 +252,7 @@ class GenericWindow:
         if not self.is_open:
             raise RuntimeError(f'Window {self.window_title} is not open.')
 
-        with mss.mss() as sct:
+        with mss.mss(with_cursor=True) as sct:
             bbox = (self.window.left, self.window.top, self.window.left + self.window.width, self.window.top + self.window.height)
             sct_img = sct.grab(bbox)
             img = Image.frombytes('RGB', sct_img.size, sct_img.rgb)
@@ -1022,6 +1022,7 @@ class RuneLiteClient(GenericWindow):
                         return
         raise RuntimeError(f'[SmartClick] cant find match {hover_texts}. Hover text: "{ans}"')
 
+    @control.guard
     def get_hover_texts(self):
         if sys.platform.startswith('linux'):
             # TODO linux bullshit
