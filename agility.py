@@ -14,6 +14,9 @@ import cv2
 import time
 client = RuneLiteClient('')
 
+from core import cv_debug
+cv_debug.enable()
+
 terminate = False
 
 # NEED BETTER AGILITY PLUGIN
@@ -27,6 +30,7 @@ terminate = False
 NEXT = (0,255,100)
 STOP = (255,0,50)
 GRACE = (255,0,255)
+WAIT = (255,135,0)
 ACTIONS = [
     'jump', 'climb', 'vault', 'gap', 'cross', 
     'rope','wall','-up', 'grab', 'leap',
@@ -42,7 +46,15 @@ def main():
     threading.Thread(target=listen_for_escape, daemon=True).start()
     start = time.time()
     fails = 0
+    wait_cnt = 0
     while not terminate:
+        if get_color_tile(WAIT):
+            print('still waiting...')
+            time.sleep(1)
+            wait_cnt += 1
+            if wait_cnt > 5:
+                continue
+        wait_cnt = 0
         timeout_check(start)
         action = click_tile(NEXT, ACTIONS)
         if action:
@@ -61,14 +73,16 @@ def main():
         click_tile(GRACE, ['take','grace'])
         
 
-
+def get_color_tile(tile_color, tol=40):
+    try:
+        return find_color_box(client.get_filtered_screenshot(), tile_color, tol=tol)
+    except Exception as e:
+        print(f"Error getting color tile {tile_color}: {e}")
+        return None
 
 def click_tile(tile_color, action):
-    box = None
-    try: 
-        box = find_color_box(client.get_screenshot(), tile_color, tol=40)
-    except: 
-        print(f"Failed to find tile {tile_color}")
+    box = get_color_tile(tile_color)
+    if not box:
         return False
     try:
         client.smart_click_match(
