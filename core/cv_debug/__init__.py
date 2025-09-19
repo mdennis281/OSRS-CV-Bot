@@ -8,7 +8,6 @@ import io
 from typing import Optional, Dict, Any, Tuple
 from collections import deque
 from queue import Queue, Full, Empty
-
 from PIL import Image
 
 from core.region_match import MatchResult
@@ -100,7 +99,7 @@ def _worker_loop():
                 "timestamp": _fmt_ts(time.time() - start_t),
                 "confidence": round(float(match.confidence), 6),
                 "scale": float(getattr(match, "scale", 1.0)),
-                "bbox": list(match.bounding_box),
+                "bbox": [int(x) for x in match.bounding_box],
                 "images": {
                     "template": tpl_b64,
                     "parent_annotated": ann_b64,
@@ -243,8 +242,13 @@ setInterval(refresh, 1500);
         with _lock:
             by_id = {it["id"]: it for it in _items}
             items = [by_id[i] for i in req_ids if i in by_id]
-        return jsonify({"items": items})
-
+        try:
+            return jsonify({"items": items})
+        except Exception as e:
+            for item in items:
+                item.pop("images", None)
+                print(item)
+            raise e
     @app.get("/stream")
     def stream():
         q = _publisher.register()
@@ -294,17 +298,23 @@ def enable(host: str = "127.0.0.1", port: int = 5055) -> None:
     _app_thread = threading.Thread(target=_run_app, name="cvdebug-http", daemon=True)
     _app_thread.start()
 
-def enqueue_match(parent: Image.Image, template: Image.Image, match: MatchResult) -> None:
+def enqueue_match(parent: Image.Image, template: Image.Image | tuple[int, int, int], match: MatchResult) -> None:
     """
     Non-blocking enqueue. No-ops if not enabled.
     Copies are done inside to avoid main-thread cost if disabled.
+    If template is an (r, g, b) tuple, create a 5x5 image filled with that color.
     """
     if not _enabled:
         return
     try:
         # Cheap shallow copies to decouple from caller
         p = parent.copy()
-        t = template.copy()
+        if (isinstance(template, tuple) or isinstance(template, list)) and len(template) == 3:
+            # Create a 5x5 image with the given RGB color
+            t = Image.new("RGB", (5, 5), template)
+            print('template color debug enqueue')
+        else:
+            t = template.copy()
         m = match.copy() if hasattr(match, "copy") else match
         _tasks.put_nowait((p, t, m))
     except Full:

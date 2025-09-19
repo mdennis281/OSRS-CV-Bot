@@ -272,25 +272,6 @@ def find_color_box(
     # filled = cv2.countNonZero(mask[top:bottom+1, left:right+1])
     filled = np.count_nonzero(mask[top:bottom + 1, left:right + 1])
 
-    # is_axis_aligned = (
-    #     axis_ratio < 0.2 or            # very thin outline
-    #     filled >= 0.9 * best_area
-    # )
-
-    # if is_axis_aligned:
-    #     # 4A. simple axis‑aligned path (unchanged except defaults) ───────
-    #     left_in, right_in = (left + 1, right - 1) if w > 2 else (left, right)
-    #     top_in, bottom_in = (top + 1, bottom - 1) if h > 2 else (top, bottom)
-    #     pts = [
-    #         (left_in,  top_in),
-    #         (right_in, top_in),
-    #         (right_in, bottom_in),
-    #         (left_in,  bottom_in),
-    #     ]
-    #     expected_perim = 2 * (w + h)
-    #     confidence = best_area / max(expected_perim, 1)
-    #     return ShapeResult(points=pts, confidence=confidence)
-
     # 4B. rotated rectangle path ────────────────────────────────────────
     # OpenCV wants (x, y) not (row, col)
     pts_xy = np.flip(coords_best, axis=1).astype(np.float32)
@@ -311,7 +292,15 @@ def find_color_box(
     expected_perim = 2 * (w_rot + h_rot)
     confidence = best_area / max(expected_perim, 1)
 
-    return ShapeResult(points=ordered, confidence=confidence)
+    sr = ShapeResult(points=ordered, confidence=confidence)
+
+    # Non-blocking debug enqueue; does nothing unless cv_debug.enable() was called.
+    try:
+        cv_debug.enqueue_match(pil_img, target_rgb, sr)
+    except Exception:
+        pass
+
+    return sr
 
 
 def mask_above_color_value(
