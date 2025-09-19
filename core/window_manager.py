@@ -112,6 +112,8 @@ class WindowsWindow:
     
     def __init__(self, win32_window):
         # Copy all attributes from the original window
+        import pygetwindow as gw
+        self.gw = gw
         self.win32_window = win32_window
 
     @property
@@ -160,6 +162,7 @@ class WindowsWindow:
     def bring_to_focus(self):
         """Bring window to foreground on Windows"""
         if not self.is_focused():
+            log.info('Bringing window to focus')
             # Pressing alt makes activate() more reliable on Windows
             try:
                 keyboard.press('alt')
@@ -174,8 +177,8 @@ class WindowsWindow:
     def is_focused(self):
         """Return True if this window is the active window"""
         try:
-            import pygetwindow as gw
-            active = gw.getActiveWindow()
+            
+            active = self.gw.getActiveWindow()
             return active and active._hWnd == self.win32_window._hWnd
         except Exception:
             return False
