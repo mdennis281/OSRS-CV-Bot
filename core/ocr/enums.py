@@ -1,28 +1,31 @@
 from enum import Enum
 
 class FontChoice(Enum):
+    # modern
+    RUNESCAPE_BARBARIAN_ASSAULT = "RuneScape Barbarian Assault"
+    RUNESCAPE_BOLD_12 = "RuneScape Bold 12"
+    RUNESCAPE_FAIRY_LARGE = "RuneScape Fairy Large"
+    RUNESCAPE_FAIRY = "RuneScape Fairy"
+    RUNESCAPE_PLAIN_11 = "RuneScape Plain 11"
+    RUNESCAPE_PLAIN_12 = "RuneScape Plain 12"
+    RUNESCAPE_QUILL_8 = "RuneScape Quill 8"
+    RUNESCAPE_QUILL_CAPS = "RuneScape Quill Caps"
+    RUNESCAPE_QUILL = "RuneScape Quill"
+    # RUNESCAPE_SUROK intentionally omitted (no TTF present)
+    
+    # legacy (values match legacy TTF stems)
     RUNESCAPE = "osrs"
     RUNESCAPE_BOLD = "osrs_bold"
     RUNESCAPE_SMALL = "osrs_small"
     AUTO = "auto"   
+
+# New canonical identifiers for all TTFs (existing ones treated as legacy)
 
 class TessOem(Enum):
     TESSERACT_ONLY = 0
     LSTM_ONLY = 1
     TESSERACT_AND_LSTM = 2
     DEFAULT = 3
-
-class TessPsm(Enum):
-    SINGLE_COLUMN = 1
-    SINGLE_BLOCK_VERT_TEXT = 2
-    SINGLE_LINE = 3
-    SINGLE_WORD = 4
-    CIRCLE_WORD = 5
-    SINGLE_CHAR = 6
-    SPARSE_TEXT = 7
-    SPARSE_TEXT_OSD = 8
-    RAW_LINE = 9
-    COUNT = 10
 
 class TessPsm(Enum):
     """Page Segmentation Mode (layout analysis strategy)."""

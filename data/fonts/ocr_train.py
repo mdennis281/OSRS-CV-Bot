@@ -16,7 +16,7 @@ MAX_THREADS = os.cpu_count() or 4
 
 # ───── helpers ───────────────────────────────────────────────────────────
 def run(cmd: list[str], must_exist: bool = False):
-    print("+", " ".join(map(str, cmd)))
+    #print("+", " ".join(map(str, cmd)))
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         print(result.stdout)
@@ -38,10 +38,70 @@ def get_tessdata_dir() -> pathlib.Path:
 
 
 def make_box_text(charset: str, lines: int = 600) -> str:
-    return "\n".join(
-        "".join(random.choice(charset) for _ in range(random.randint(20, 45)))
-        for _ in range(lines)
-    )
+    """Create lines composed of multiple short tokens separated by spaces.
+    This minimizes full-line drops when some tokens are unrenderable.
+    """
+    letters = [c for c in charset if c != " "]
+    if not letters:
+        letters = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+    out = []
+    for _ in range(lines):
+        token_count = random.randint(6, 12)
+        tokens = []
+        for _ in range(token_count):
+            n = random.randint(3, 8)
+            tokens.append("".join(random.choice(letters) for _ in range(n)))
+        out.append(" ".join(tokens))
+    return "\n".join(out)
+
+
+def supported_chars_for_font(font_file: str, requested: str) -> str:
+    """Return subset of requested chars actually supported by the font (via CMAP and glyphs).
+    Ensures we only keep codepoints mapped to real glyphs (not .notdef). Falls back to a safe
+    alnum set if the intersection is empty or if fontTools is unavailable.
+    """
+    safe_fallback = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+    try:
+        from fontTools.ttLib import TTFont
+        tt = TTFont(font_file)
+        cmap = tt.getBestCmap() or {}
+        glyph_order = set(tt.getGlyphOrder() or [])
+        tt.close()
+        kept = []
+        for ch in requested:
+            cp = ord(ch)
+            gname = cmap.get(cp)
+            if not gname:
+                continue
+            if gname == ".notdef" or gname not in glyph_order:
+                continue
+            kept.append(ch)
+        filtered = "".join(kept)
+        if not filtered:
+            print(f"WARNING: '{pathlib.Path(font_file).name}' had no overlap; using safe alnum fallback.")
+            filtered = safe_fallback
+        return filtered
+    except Exception as e:
+        print(f"WARNING: fontTools not available or failed for {font_file}: {e}; using safe fallback.")
+        return safe_fallback
+
+
+def font_face_name(font_file: str) -> str:
+    """Extract a robust face name for text2image (prefer Full name, then Family)."""
+    try:
+        from fontTools.ttLib import TTFont
+        tt = TTFont(font_file)
+        name_table = tt["name"]
+        full = None; fam = None
+        for rec in name_table.names:
+            if rec.nameID == 4 and not full:
+                full = rec.toUnicode()
+            if rec.nameID == 1 and not fam:
+                fam = rec.toUnicode()
+        tt.close()
+        return (full or fam or pathlib.Path(font_file).stem).strip()
+    except Exception:
+        return pathlib.Path(font_file).stem
 
 
 def tint_and_gradient(tiff_path: pathlib.Path):
@@ -141,8 +201,8 @@ def train(
     training_text.write_text(make_box_text(charset), "utf-8")
 
     # 2) synthetic TIFF pages with ThreadPoolExecutor
-    tmp_fc = pathlib.Path(tempfile.mkdtemp(prefix="fc_"))
-    iterations = 10
+    tmp_fc_root = pathlib.Path(tempfile.mkdtemp(prefix="fcroot_"))
+    iterations = 5
     dpilist = [120, 150, 180, 200, 225, 250, 275, 300]
     ptsizes = [12, 14, 18, 24, 36]
 
@@ -151,6 +211,8 @@ def train(
         for dpi in dpilist:
             for ptsize in ptsizes:
                 tag = f"{lang_code}_{i}_{dpi}_{ptsize}"
+                fc_dir = tmp_fc_root / tag
+                fc_dir.mkdir(parents=True, exist_ok=True)
                 cmd = [
                     "text2image",
                     f"--font={font_name}",
@@ -158,12 +220,12 @@ def train(
                     f"--outputbase={out_dir / tag}",
                     "--ptsize", f"{ptsize}",
                     "--resolution", str(dpi),
-                    f"--fontconfig_tmpdir={tmp_fc}",
+                    f"--fontconfig_tmpdir={fc_dir}",
                     f"--text={training_text}",
                     "--degrade_image=false",
                     "--blur=false",
                     "--smooth_noise=false",
-                    "--white_noise=false",
+                    "--white_noise=false"
                 ]
                 commands.append(cmd)
 
@@ -171,7 +233,10 @@ def train(
     with ThreadPoolExecutor(max_workers=MAX_THREADS) as ex:
         futures = [ex.submit(run, cmd) for cmd in commands]
         for f in as_completed(futures):
-            f.result()
+            try:
+                f.result()
+            except Exception as e:
+                print(f"WARNING: text2image job failed: {e}")
 
     tiff_pages = list(out_dir.glob(f"{lang_code}_*.tif"))
     print(f"DEBUG  TIFF pages found for '{lang_code}': {len(tiff_pages)}")
@@ -245,36 +310,42 @@ def train(
     shutil.copy2(final, final.parent.parent)
 
 def main():
-    chars = r'0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz,.\/-():_'
-    presets = [
-        (
-            r"C:\Users\Michael\projects\auto_rs\data\fonts\osrs.ttf",
-            "osrs",
-            "osrs",
+    # Discover all .ttf fonts in the fonts directory and train each
+    fonts_dir = pathlib.Path(r"C:\Users\Michael\projects\auto_rs\data\fonts").resolve()
+    out_dir = fonts_dir / "tesseract"
+
+    # requested character set (filtered per font). Include a space to break tokens.
+    base_chars = (
+        "0123456789"
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        "abcdefghijklmnopqrstuvwxyz"
+        + r",.\/()-:_ "
+    )
+
+    ttf_files = sorted(fonts_dir.glob("*.ttf"), key=lambda p: p.stem.lower(),reverse=True)
+    if not ttf_files:
+        sys.exit(f"❌  No .ttf files found in {fonts_dir}")
+
+    presets = []
+    for ttf in ttf_files:
+        stem = ttf.stem
+        face = font_face_name(str(ttf))
+        filtered = supported_chars_for_font(str(ttf), base_chars)
+        if len(filtered) < len(base_chars):
+            missing = set(base_chars) - set(filtered)
+            if missing:
+                print(f"INFO  '{face}' missing {len(missing)} chars; filtered out: {''.join(sorted(missing))}")
+        presets.append((
+            str(ttf),
+            face,
+            stem,
             "eng_best",
-            r"C:\Users\Michael\projects\auto_rs\data\fonts\tesseract",
-            chars
-        ),
-        (
-            r"C:\Users\Michael\projects\auto_rs\data\fonts\osrs_bold.ttf",
-            "osrs_bold Bold",
-            "osrs_bold",
-            "eng_best",
-            r"C:\Users\Michael\projects\auto_rs\data\fonts\tesseract",
-            chars
-        ),
-        (
-            r"C:\Users\Michael\projects\auto_rs\data\fonts\osrs_small.ttf",
-            "osrs_small",
-            "osrs_small",
-            "eng_best",
-            r"C:\Users\Michael\projects\auto_rs\data\fonts\tesseract",
-            chars
-        ),
-    ]
+            str(out_dir),
+            filtered
+        ))
 
     for font_file, font_name, lang_code, base_model, output_dir, charset in presets:
-        print(f"=== Starting training for '{lang_code}' ===")
+        print(f"=== Starting training for '{lang_code}' (font: {font_name}) ===")
         train(font_file, font_name, lang_code, base_model, output_dir, charset, MAX_THREADS)
 
 
