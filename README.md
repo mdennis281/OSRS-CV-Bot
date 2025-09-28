@@ -1,5 +1,5 @@
-# auto_rs
- osrs automation using screenshots, template matching & OCR
+# Old-school RuneScape Computer Vision Bot
+A vibe coding experiment that has grown into a pretty impressive botting framework.
 
 
  ## Demos
