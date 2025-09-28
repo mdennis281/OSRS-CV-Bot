@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>WebSocket Log Viewer</title>
+  <style>
+    /* ---------------- Dark Mode Styles ---------------- */
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background-color: #1e1e1e;
+      color: #f0f0f0;
+    }
+
+    .container {
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+      transition: all 0.3s ease;
+    }
+
+    /* --------- Sidebar (Filters) --------- */
+    .sidebar {
+      width: 250px;
+      background-color: #2b2b2b;
+      border-right: 1px solid #444;
+      padding: 10px;  /* Reduced from 16px */
+      box-sizing: border-box;
+      overflow-y: auto;
+      transition: transform 0.3s ease, margin-left 0.3s ease;
+    }
+    
+    .sidebar.collapsed {
+      margin-left: -250px;
+    }
+
+    .sidebar h2 {
+      margin-top: 0;
+      font-size: 1rem;  /* Reduced from 1.2rem */
+      border-bottom: 1px solid #444;
+      padding-bottom: 6px;  /* Reduced from 8px */
+      margin-bottom: 6px;  /* Added margin-bottom */
+    }
+
+    .filter-group {
+      margin-bottom: 16px;  /* Reduced from 24px */
+    }
+
+    .filter-group label {
+      display: block;
+      margin-bottom: 3px;  /* Reduced from 4px */
+      cursor: pointer;
+    }
+
+    .filter-group input[type="checkbox"] {
+      margin-right: 6px;  /* Reduced from 8px */
+    }
+
+    /* Filter Controls */
+    .filter-controls {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 6px;  /* Reduced from 10px */
+    }
+    
+    .filter-controls button {
+      background: #3a3a3a;
+      color: #f0f0f0;
+      border: none;
+      padding: 3px 6px;  /* Reduced from 4px 8px */
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 0.7rem;  /* Reduced from 0.8rem */
+    }
+    
+    .filter-controls button:hover {
+      background: #4a4a4a;
+    }
+
+    /* --------- Main Log Panel --------- */
+    .log-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background-color: #1e1e1e;
+      box-sizing: border-box;
+    }
+
+    .log-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px;
+    }
+    
+    .log-header-left, .log-header-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;  /* Reduced from 10px */
+    }
+
+    .log-header h1 {
+      font-size: 1rem;  /* Reduced from 1.2rem */
+      margin: 0;
+    }
+
+    /* Connection indicator */
+    .connection-indicator {
+      width: 10px;  /* Reduced from 12px */
+      height: 10px;  /* Reduced from 12px */
+      border-radius: 50%;
+      background-color: #f44747; /* Red for disconnected */
+      margin-left: 8px;  /* Reduced from 10px */
+      transition: background-color 0.3s ease;
+    }
+    
+    .connection-indicator.connected {
+      background-color: #6A9955; /* Green for connected */
+    }
+    
+    /* Sidebar toggle button */
+    .sidebar-toggle {
+      background: none;
+      border: none;
+      color: #f0f0f0;
+      cursor: pointer;
+      font-size: 1rem;  /* Reduced from 1.2rem */
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      width: 20px;  /* Reduced from 24px */
+      height: 20px;  /* Reduced from 24px */
+    }
+    
+    /* Clear button icon */
+    .clear-button {
+      background: none;
+      border: none;
+      color: #f0f0f0;
+      cursor: pointer;
+      font-size: 1rem;  /* Reduced from 1.2rem */
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      width: 20px;  /* Reduced from 24px */
+      height: 20px;  /* Reduced from 24px */
+    }
+
+    .logs {
+      flex: 1;
+      overflow-y: auto;
+      background-color: #121212;
+      border: 1px solid #444;
+      border-radius: 3px;  /* Reduced from 4px */
+      padding: 6px;  /* Reduced from 8px */
+      box-sizing: border-box;
+    }
+
+    .log-entry {
+      font-family: monospace;
+      margin-bottom: 3px;  /* Reduced from 4px */
+      padding: 3px;  /* Reduced from 4px */
+      border-radius: 2px;
+    }
+
+    .log-entry.DEBUG   { color: #9cdcfe; }
+    .log-entry.INFO    { color: #dcdcaa; }
+    .log-entry.WARNING { color: #d7ba7d; }
+    .log-entry.ERROR   { color: #f44747; }
+    .log-entry.CRITICAL{ color: #f44747; font-weight: bold; }
+
+    .log-entry .timestamp {
+      color: #888;
+      margin-right: 8px;
+    }
+
+    .log-entry .logger-name {
+      color: #c586c0;
+      margin-right: 8px;
+    }
+
+    .log-entry .message {
+      color: #f0f0f0;
+    }
+
+    /* Scrollbar styling (dark) */
+    .logs::-webkit-scrollbar {
+      width: 8px;
+    }
+    .logs::-webkit-scrollbar-thumb {
+      background-color: #444;
+      border-radius: 4px;
+    }
+    .logs::-webkit-scrollbar-track {
+      background-color: #1e1e1e;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- ================= Sidebar ================= -->
+    <aside class="sidebar" id="sidebar">
+      <h2>Filters</h2>
+
+      <!-- Logger Name Filter -->
+      <div class="filter-group" id="loggerFilterGroup">
+        <div class="filter-controls">
+          <h3 style="font-size: 1rem; margin: 0;">Logger Names</h3>
+          <div>
+            <button id="selectAllLoggers">All</button>
+            <button id="selectNoneLoggers">None</button>
+          </div>
+        </div>
+        <!-- Checkboxes will be injected here -->
+        <div id="logger-checkboxes">
+          <em>Loading...</em>
+        </div>
+      </div>
+
+      <!-- Log Level Filter -->
+      <div class="filter-group" id="levelFilterGroup">
+        <div class="filter-controls">
+          <h3 style="font-size: 1rem; margin: 0;">Log Levels</h3>
+          <div>
+            <button id="selectAllLevels">All</button>
+            <button id="selectNoneLevels">None</button>
+          </div>
+        </div>
+        <label>
+          <input type="checkbox" value="DEBUG" checked />
+          DEBUG
+        </label>
+        <label>
+          <input type="checkbox" value="INFO" checked />
+          INFO
+        </label>
+        <label>
+          <input type="checkbox" value="WARNING" checked />
+          WARNING
+        </label>
+        <label>
+          <input type="checkbox" value="ERROR" checked />
+          ERROR
+        </label>
+        <label>
+          <input type="checkbox" value="CRITICAL" checked />
+          CRITICAL
+        </label>
+      </div>
+    </aside>
+
+    <!-- ================= Main Panel ================= -->
+    <section class="log-panel">
+      <div class="log-header">
+        <div class="log-header-left">
+          <button class="sidebar-toggle" id="sidebarToggle">☰</button>
+          <h1>Bot Logs</h1>
+          <div class="connection-indicator" id="connectionIndicator" title="WebSocket Connection Status"></div>
+        </div>
+        <div class="log-header-right">
+          <button class="clear-button" id="clearLogsBtn" title="Clear Logs">🗑️</button>
+        </div>
+      </div>
+      <div class="logs" id="logsContainer">
+        <!-- Incoming log entries will appear here -->
+      </div>
+    </section>
+  </div>
+
+  <script>
+    // ---------- Get host from URL parameters ----------
+    function getUrlParam(name, defaultValue) {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get(name) || defaultValue;
+    }
+
+    // ---------- Configuration ----------
+    const host = getUrlParam('host', 'localhost');
+    const WS_URL = `ws://${host}:8765`;
+
+    // ---------- State ----------
+    let availableLoggers = [];      // filled after "get_loggers" response
+    let subscribedLoggers = new Set();  // which names are checked
+    let allowedLevels = new Set(['DEBUG','INFO','WARNING','ERROR','CRITICAL']);
+    let isConnected = false;  // Track WebSocket connection status
+    
+    // ---------- DOM References ----------
+    const sidebar = document.getElementById('sidebar');
+    const sidebarToggle = document.getElementById('sidebarToggle');
+    const connectionIndicator = document.getElementById('connectionIndicator');
+    const loggerCheckboxesContainer = document.getElementById('logger-checkboxes');
+    const logsContainer = document.getElementById('logsContainer');
+    const clearLogsBtn = document.getElementById('clearLogsBtn');
+    const levelFilterGroup = document.getElementById('levelFilterGroup');
+    const selectAllLoggers = document.getElementById('selectAllLoggers');
+    const selectNoneLoggers = document.getElementById('selectNoneLoggers');
+    const selectAllLevels = document.getElementById('selectAllLevels');
+    const selectNoneLevels = document.getElementById('selectNoneLevels');
+    
+    // ---------- LocalStorage Keys ----------
+    const LS_SIDEBAR_STATE = 'log_viewer_sidebar_state';
+    const LS_SUBSCRIBED_LOGGERS = 'log_viewer_subscribed_loggers';
+    const LS_ALLOWED_LEVELS = 'log_viewer_allowed_levels';
+    
+    // ---------- Initialize UI state from localStorage ----------
+    function initFromLocalStorage() {
+      // Initialize sidebar state - collapsed by default
+      if (localStorage.getItem(LS_SIDEBAR_STATE) !== 'expanded') {
+        sidebar.classList.add('collapsed');
+      }
+      
+      // Initialize logger subscriptions (will be applied when loggers are loaded)
+      try {
+        const savedLoggers = localStorage.getItem(LS_SUBSCRIBED_LOGGERS);
+        if (savedLoggers) {
+          subscribedLoggers = new Set(JSON.parse(savedLoggers));
+        }
+      } catch (e) {
+        console.error('Error loading subscribed loggers from localStorage:', e);
+      }
+      
+      // Initialize log levels
+      try {
+        const savedLevels = localStorage.getItem(LS_ALLOWED_LEVELS);
+        if (savedLevels) {
+          allowedLevels = new Set(JSON.parse(savedLevels));
+          updateLevelCheckboxes();
+        }
+      } catch (e) {
+        console.error('Error loading allowed levels from localStorage:', e);
+      }
+    }
+    
+    function updateLevelCheckboxes() {
+      const levelCheckboxes = levelFilterGroup.querySelectorAll('input[type="checkbox"]');
+      levelCheckboxes.forEach(cb => {
+        cb.checked = allowedLevels.has(cb.value);
+      });
+    }
+    
+    // Load state from localStorage when page loads
+    initFromLocalStorage();
+    
+    // ---------- WebSocket Setup ----------
+    let socket = null;
+    let reconnectInterval = null;
+    let receivedMessagesCache = new Set(); // Add a cache to track duplicate messages
+    
+    function connectWebSocket() {
+      // Clear any existing socket
+      if (socket) {
+        try {
+          socket.close();
+        } catch (e) {
+          console.log('Error closing existing socket:', e);
+        }
+      }
+      
+      socket = new WebSocket(WS_URL);
+      
+      socket.addEventListener('open', () => {
+        console.log('WebSocket connected');
+        isConnected = true;
+        connectionIndicator.classList.add('connected');
+        connectionIndicator.title = 'Connected to ' + host;
+        receivedMessagesCache.clear(); // Clear message cache when reconnecting
+        
+        if (reconnectInterval) {
+          clearInterval(reconnectInterval);
+          reconnectInterval = null;
+        }
+        
+        // Request the list of loggers
+        socket.send(JSON.stringify({command: 'get_loggers'}));
+        
+        // If we had existing subscriptions, resubscribe
+        if (subscribedLoggers.size > 0) {
+          sendSubscribeRequest();
+        }
+      });
+      
+      socket.addEventListener('message', event => {
+        try {
+          const msg = JSON.parse(event.data);
+          handleServerMessage(msg);
+        } catch (err) {
+          console.error('Invalid JSON from server:', event.data);
+        }
+      });
+      
+      socket.addEventListener('close', () => {
+        console.warn('WebSocket closed');
+        isConnected = false;
+        connectionIndicator.classList.remove('connected');
+        connectionIndicator.title = 'Disconnected - trying to reconnect...';
+        
+        if (!reconnectInterval) {
+          reconnectInterval = setInterval(() => {
+            console.log('Attempting to reconnect...');
+            connectWebSocket();
+          }, 3000);
+        }
+      });
+      
+      socket.addEventListener('error', (error) => {
+        console.error('WebSocket error:', error);
+        isConnected = false;
+        connectionIndicator.classList.remove('connected');
+        connectionIndicator.title = 'Connection error';
+      });
+    }
+    
+    // Initial connection
+    connectWebSocket();
+
+    // ---------- Handle Incoming Messages ----------
+    function handleServerMessage(msg) {
+      switch (msg.type) {
+        case 'loggers_list':
+          populateLoggerFilter(msg.loggers);
+          break;
+
+        case 'log':
+          renderLogEntry(msg);
+          break;
+
+        case 'logger_info':
+          // Could be used to show info, but we ignore for now
+          break;
+
+        case 'subscription_changed':
+          // We could show a status, but we ignore it
+          break;
+
+        case 'error':
+          console.error('Server error:', msg.error_code, msg.message);
+          break;
+
+        case 'pong':
+          // ignore or show health check info
+          break;
+
+        default:
+          console.warn('Unknown message type:', msg);
+      }
+    }
+
+    // ---------- Populate Logger-Name Checkboxes ----------
+    function populateLoggerFilter(loggers) {
+      availableLoggers = loggers;
+      loggerCheckboxesContainer.innerHTML = ''; // clear "Loading..."
+
+      // Sort alphabetically
+      loggers.sort();
+      
+      // If we have saved loggers in localStorage and this is the first load,
+      // we'll use those instead of checking all by default
+      const useLocalStorage = subscribedLoggers.size > 0;
+
+      loggers.forEach(name => {
+        const wrapper = document.createElement('label');
+        wrapper.style.display = 'block';
+        wrapper.style.marginBottom = '4px';
+
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.value = name;
+        cb.checked = useLocalStorage ? subscribedLoggers.has(name) : true;
+        cb.addEventListener('change', onLoggerCheckboxChange);
+
+        // If we're not using localStorage data, subscribe to all loggers by default
+        if (!useLocalStorage) {
+          subscribedLoggers.add(name);
+        }
+
+        wrapper.appendChild(cb);
+        wrapper.appendChild(document.createTextNode(' ' + name));
+        loggerCheckboxesContainer.appendChild(wrapper);
+      });
+
+      // Now send initial subscribe request
+      sendSubscribeRequest();
+    }
+
+    // ---------- When a Logger-Name Checkbox Changes ----------
+    function onLoggerCheckboxChange(evt) {
+      const name = evt.target.value;
+      if (evt.target.checked) {
+        subscribedLoggers.add(name);
+      } else {
+        subscribedLoggers.delete(name);
+      }
+      
+      // Save to localStorage
+      localStorage.setItem(LS_SUBSCRIBED_LOGGERS, JSON.stringify(Array.from(subscribedLoggers)));
+      
+      sendSubscribeRequest();
+    }
+
+    // ---------- Send Subscribe Command to Server ----------
+    function sendSubscribeRequest() {
+      if (!socket || socket.readyState !== WebSocket.OPEN) return;
+      
+      const arr = Array.from(subscribedLoggers);
+      socket.send(JSON.stringify({command: 'subscribe', loggers: arr}));
+    }
+
+    // ---------- Render a Single Log Entry ----------
+    function renderLogEntry({timestamp, logger_name, level, message}) {
+      // Check if this log's level is allowed
+      if (!allowedLevels.has(level)) return;
+      
+      // Create a signature to detect duplicates
+      const msgSignature = `${timestamp}:${logger_name}:${level}:${message}`;
+      
+      // Skip if we've seen this exact message recently
+      if (receivedMessagesCache.has(msgSignature)) {
+        return;
+      }
+      
+      // Add to cache (and limit cache size)
+      receivedMessagesCache.add(msgSignature);
+      if (receivedMessagesCache.size > 1000) {
+        receivedMessagesCache.clear(); // Simple approach: just clear if too large
+      }
+
+      const entry = document.createElement('div');
+      entry.classList.add('log-entry', level);
+
+      // Timestamp
+      const tsSpan = document.createElement('span');
+      tsSpan.classList.add('timestamp');
+      tsSpan.textContent = `[${timestamp}]`;
+      entry.appendChild(tsSpan);
+
+      // Logger name
+      const lgSpan = document.createElement('span');
+      lgSpan.classList.add('logger-name');
+      lgSpan.textContent = `${logger_name}`;
+      entry.appendChild(lgSpan);
+
+      // Level
+      const lvlSpan = document.createElement('span');
+      lvlSpan.classList.add('level');
+      lvlSpan.textContent = level;
+      entry.appendChild(lvlSpan);
+
+      // Message
+      const msgSpan = document.createElement('span');
+      msgSpan.classList.add('message');
+      msgSpan.textContent = ` – ${message}`;
+      entry.appendChild(msgSpan);
+
+      logsContainer.appendChild(entry);
+      // Scroll to bottom
+      logsContainer.scrollTop = logsContainer.scrollHeight;
+    }
+
+    // ---------- Level Filter Handling ----------
+    // Whenever a level‐checkbox changes, update allowedLevels
+    const levelCheckboxes = levelFilterGroup.querySelectorAll('input[type="checkbox"]');
+    levelCheckboxes.forEach(cb => {
+      cb.addEventListener('change', () => {
+        allowedLevels.clear();
+        levelCheckboxes.forEach(lvlCb => {
+          if (lvlCb.checked) allowedLevels.add(lvlCb.value);
+        });
+        
+        // Save to localStorage
+        localStorage.setItem(LS_ALLOWED_LEVELS, JSON.stringify(Array.from(allowedLevels)));
+      });
+    });
+
+    // ---------- Clear Button ----------
+    clearLogsBtn.addEventListener('click', () => {
+      logsContainer.innerHTML = '';
+    });
+    
+    // ---------- Sidebar Toggle ----------
+    sidebarToggle.addEventListener('click', () => {
+      sidebar.classList.toggle('collapsed');
+      localStorage.setItem(
+        LS_SIDEBAR_STATE, 
+        sidebar.classList.contains('collapsed') ? 'collapsed' : 'expanded'
+      );
+    });
+    
+    // ---------- Select All/None Buttons ----------
+    selectAllLoggers.addEventListener('click', () => {
+      const checkboxes = loggerCheckboxesContainer.querySelectorAll('input[type="checkbox"]');
+      checkboxes.forEach(cb => {
+        cb.checked = true;
+        subscribedLoggers.add(cb.value);
+      });
+      localStorage.setItem(LS_SUBSCRIBED_LOGGERS, JSON.stringify(Array.from(subscribedLoggers)));
+      sendSubscribeRequest();
+    });
+    
+    selectNoneLoggers.addEventListener('click', () => {
+      const checkboxes = loggerCheckboxesContainer.querySelectorAll('input[type="checkbox"]');
+      checkboxes.forEach(cb => {
+        cb.checked = false;
+        subscribedLoggers.delete(cb.value);
+      });
+      localStorage.setItem(LS_SUBSCRIBED_LOGGERS, JSON.stringify(Array.from(subscribedLoggers)));
+      sendSubscribeRequest();
+    });
+    
+    selectAllLevels.addEventListener('click', () => {
+      const checkboxes = levelFilterGroup.querySelectorAll('input[type="checkbox"]');
+      checkboxes.forEach(cb => {
+        cb.checked = true;
+        allowedLevels.add(cb.value);
+      });
+      localStorage.setItem(LS_ALLOWED_LEVELS, JSON.stringify(Array.from(allowedLevels)));
+    });
+    
+    selectNoneLevels.addEventListener('click', () => {
+      const checkboxes = levelFilterGroup.querySelectorAll('input[type="checkbox"]');
+      checkboxes.forEach(cb => {
+        cb.checked = false;
+        allowedLevels.delete(cb.value);
+      });
+      localStorage.setItem(LS_ALLOWED_LEVELS, JSON.stringify(Array.from(allowedLevels)));
+    });
+
+    // ---------- Periodic Ping (Optional) ----------
+    // Every 30s, send a health check so server knows we're alive
+    setInterval(() => {
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({command: 'ping'}));
+      }
+    }, 30000);
+  </script>
+</body>
+</html>

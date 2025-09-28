@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Bot Controller</title>
+  <style>
+    /* ---------------- Dark Mode Styles ---------------- */
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background-color: #1e1e1e;
+      color: #f0f0f0;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+      transition: all 0.3s ease;
+    }
+
+    /* --------- Header --------- */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background-color: #2b2b2b;
+      padding: 10px;
+      border-bottom: 1px solid #444;
+    }
+
+    .header-left, .header-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .header h1 {
+      font-size: 1.2rem;
+      margin: 0;
+    }
+
+    /* Connection indicator */
+    .connection-indicator {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background-color: #f44747; /* Red for disconnected */
+      transition: background-color 0.3s ease;
+    }
+    
+    .connection-indicator.connected {
+      background-color: #6A9955; /* Green for connected */
+    }
+
+    /* --------- Control Panel --------- */
+    .control-panel {
+      background-color: #2b2b2b;
+      padding: 10px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      border-bottom: 1px solid #444;
+    }
+
+    .control-button {
+      background-color: #3a3a3a;
+      border: none;
+      color: #f0f0f0;
+      padding: 8px 16px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .control-button:hover {
+      background-color: #4a4a4a;
+    }
+
+    .control-button.danger {
+      background-color: #6f2020;
+    }
+
+    .control-button.danger:hover {
+      background-color: #8f2828;
+    }
+
+    .status-display {
+      margin-left: auto;
+      display: flex;
+      gap: 15px;
+      align-items: center;
+    }
+
+    .status-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .status-label {
+      font-size: 0.8rem;
+      color: #888;
+    }
+
+    .status-value {
+      font-family: monospace;
+      font-weight: bold;
+    }
+
+    /* --------- Main Content --------- */
+    .main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 10px;
+      overflow-y: auto;
+      background-color: #1e1e1e;
+    }
+
+    .screenshot-container {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .screenshot-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+    }
+
+    .screenshot-title {
+      font-size: 1rem;
+      font-weight: bold;
+    }
+
+    .screenshot-controls {
+      display: flex;
+      gap: 5px;
+    }
+
+    .screenshot-image {
+      max-width: 100%;
+      max-height: 70vh;
+      border: 1px solid #444;
+      background-color: #121212;
+      border-radius: 3px;
+    }
+
+    .refresh-button {
+      background-color: #3a3a3a;
+      border: none;
+      color: #f0f0f0;
+      padding: 5px 10px;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+
+    .refresh-button:hover {
+      background-color: #4a4a4a;
+    }
+
+    /* Loading spinner */
+    .loading-spinner {
+      border: 3px solid #333;
+      border-top: 3px solid #6A9955;
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      animation: spin 1s linear infinite;
+      display: inline-block;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- ================= Header ================= -->
+    <div class="header">
+      <div class="header-left">
+        <h1>Bot Controller</h1>
+        <div class="connection-indicator" id="connectionIndicator" title="API Connection Status"></div>
+      </div>
+      <div class="header-right">
+        <div class="status-item">
+          <span class="status-label">Host:</span>
+          <span class="status-value" id="hostDisplay">Loading...</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= Control Panel ================= -->
+    <div class="control-panel">
+      <button class="control-button" id="pausePlayButton">
+        <span id="pausePlayIcon">⏸️</span>
+        <span id="pausePlayText">Pause</span>
+      </button>
+      <button class="control-button danger" id="terminateButton">
+        <span>⏹️</span>
+        <span>Terminate</span>
+      </button>
+      
+      <div class="status-display">
+        <div class="status-item">
+          <span class="status-label">Status:</span>
+          <span class="status-value" id="botStatus">Unknown</span>
+        </div>
+        <div class="status-item">
+          <span class="status-label">Runtime:</span>
+          <span class="status-value" id="runtimeDisplay">00:00:00</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= Main Content ================= -->
+    <div class="main-content">
+      <div class="screenshot-container">
+        <div class="screenshot-header">
+          <div class="screenshot-title">Live View</div>
+          <div class="screenshot-controls">
+            <button class="refresh-button" id="refreshScreenshot">
+              <span id="refreshButtonText">🔄 Refresh</span>
+            </button>
+            <div class="screenshot-settings">
+              <label>
+                <input type="checkbox" id="autoRefreshToggle"> Auto-refresh
+              </label>
+              <select id="refreshInterval">
+                <option value="1000">1s</option>
+                <option value="2000" selected>2s</option>
+                <option value="5000">5s</option>
+                <option value="10000">10s</option>
+                <option value="30000">30s</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <img id="screenshotImage" class="screenshot-image" alt="Bot Screenshot" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=">
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ---------- Get host from URL parameters ----------
+    function getUrlParam(name, defaultValue) {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get(name) || defaultValue;
+    }
+
+    // ---------- Configuration ----------
+    const host = getUrlParam('host', 'localhost');
+    const API_BASE_URL = `http://${host}:5432/api`;
+    const SCREENSHOT_URL = `${API_BASE_URL}/screenshot`;
+
+    // ---------- DOM References ----------
+    const connectionIndicator = document.getElementById('connectionIndicator');
+    const hostDisplay = document.getElementById('hostDisplay');
+    const botStatus = document.getElementById('botStatus');
+    const runtimeDisplay = document.getElementById('runtimeDisplay');
+    const pausePlayButton = document.getElementById('pausePlayButton');
+    const pausePlayIcon = document.getElementById('pausePlayIcon');
+    const pausePlayText = document.getElementById('pausePlayText');
+    const terminateButton = document.getElementById('terminateButton');
+    const screenshotImage = document.getElementById('screenshotImage');
+    const refreshScreenshot = document.getElementById('refreshScreenshot');
+    const refreshButtonText = document.getElementById('refreshButtonText');
+    const autoRefreshToggle = document.getElementById('autoRefreshToggle');
+    const refreshInterval = document.getElementById('refreshInterval');
+
+    // ---------- State ----------
+    let isConnected = false;
+    let isPaused = false;
+    let isRunning = false;
+    let autoRefreshTimerId = null;
+    let isRefreshing = false;
+
+    // Display the host
+    hostDisplay.textContent = host;
+
+    // ---------- API Request Functions ----------
+
+    // Generic function to make API requests
+    async function callAPI(endpoint, method = 'GET', data = null) {
+      try {
+        const options = {
+          method,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        };
+
+        if (data && (method === 'POST' || method === 'PUT')) {
+          options.body = JSON.stringify(data);
+        }
+
+        const response = await fetch(`${API_BASE_URL}/${endpoint}`, options);
+        
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status} ${response.statusText}`);
+        }
+        
+        return await response.json();
+      } catch (error) {
+        console.error(`API call to ${endpoint} failed:`, error);
+        updateConnectionStatus(false);
+        return null;
+      }
+    }
+
+    // Get bot status
+    async function getBotStatus() {
+      const status = await callAPI('status');
+      if (status) {
+        updateConnectionStatus(true);
+        updateBotStatusDisplay(status);
+        return status;
+      }
+      return null;
+    }
+
+    // Get runtime
+    async function getRuntime() {
+      const runtime = await callAPI('runtime');
+      if (runtime) {
+        updateConnectionStatus(true);
+        runtimeDisplay.textContent = runtime.formatted;
+        return runtime;
+      }
+      return null;
+    }
+
+    // Set pause state
+    async function setPause(pauseState) {
+      const result = await callAPI('control/pause', 'POST', { pause: pauseState });
+      if (result) {
+        updateConnectionStatus(true);
+        isPaused = result.pause;
+        updatePausePlayButton();
+        return result;
+      }
+      return null;
+    }
+
+    // Set terminate state
+    async function setTerminate() {
+      const result = await callAPI('control/terminate', 'POST', { terminate: true });
+      if (result) {
+        updateConnectionStatus(true);
+        return result;
+      }
+      return null;
+    }
+
+    // ---------- UI Update Functions ----------
+
+    // Update connection status indicator
+    function updateConnectionStatus(connected) {
+      isConnected = connected;
+      connectionIndicator.classList.toggle('connected', connected);
+      connectionIndicator.title = connected 
+        ? `Connected to ${host}:5432` 
+        : `Cannot connect to ${host}:5432`;
+    }
+
+    // Update bot status display
+    function updateBotStatusDisplay(status) {
+      if (!status) return;
+      
+      isRunning = !status.running ? false : !status.paused;
+      isPaused = status.paused;
+      
+      if (!status.running) {
+        botStatus.textContent = 'Terminated';
+        botStatus.style.color = '#f44747'; // Red
+      } else if (status.paused) {
+        botStatus.textContent = 'Paused';
+        botStatus.style.color = '#d7ba7d'; // Yellow
+      } else {
+        botStatus.textContent = 'Running';
+        botStatus.style.color = '#6A9955'; // Green
+      }
+      
+      updatePausePlayButton();
+    }
+
+    // Update pause/play button state
+    function updatePausePlayButton() {
+      if (isPaused || !isRunning) {
+        pausePlayIcon.textContent = '▶️';
+        pausePlayText.textContent = 'Resume';
+        pausePlayButton.classList.add('primary');
+      } else {
+        pausePlayIcon.textContent = '⏸️';
+        pausePlayText.textContent = 'Pause';
+        pausePlayButton.classList.remove('primary');
+      }
+      
+      // Disable controls if terminated
+      if (!isRunning && !isPaused) {
+        pausePlayButton.disabled = true;
+        pausePlayButton.style.opacity = '0.5';
+        pausePlayButton.style.cursor = 'not-allowed';
+      } else {
+        pausePlayButton.disabled = false;
+        pausePlayButton.style.opacity = '1';
+        pausePlayButton.style.cursor = 'pointer';
+      }
+    }
+
+    // ---------- Screenshot Functions ----------
+    
+    // Fetch and display screenshot
+    async function updateScreenshot() {
+      if (isRefreshing) return;
+      
+      isRefreshing = true;
+      refreshButtonText.innerHTML = '<div class="loading-spinner"></div>';
+      
+      try {
+        // We need to use a timestamp to prevent caching
+        const timestamp = new Date().getTime();
+        const imgUrl = `${SCREENSHOT_URL}?t=${timestamp}`;
+        
+        // Create a new image element
+        const img = new Image();
+        img.onload = function() {
+          screenshotImage.src = imgUrl;
+          isRefreshing = false;
+          refreshButtonText.textContent = '🔄 Refresh';
+          updateConnectionStatus(true);
+        };
+        
+        img.onerror = function() {
+          console.error('Failed to load screenshot');
+          isRefreshing = false;
+          refreshButtonText.textContent = '🔄 Refresh';
+          updateConnectionStatus(false);
+        };
+        
+        img.src = imgUrl;
+      } catch (error) {
+        console.error('Error updating screenshot:', error);
+        isRefreshing = false;
+        refreshButtonText.textContent = '🔄 Refresh';
+        updateConnectionStatus(false);
+      }
+    }
+
+    // Toggle auto-refresh
+    function toggleAutoRefresh() {
+      if (autoRefreshToggle.checked) {
+        const interval = parseInt(refreshInterval.value);
+        autoRefreshTimerId = setInterval(updateScreenshot, interval);
+      } else {
+        if (autoRefreshTimerId) {
+          clearInterval(autoRefreshTimerId);
+          autoRefreshTimerId = null;
+        }
+      }
+    }
+
+    // ---------- Event Listeners ----------
+    
+    // Pause/Play button
+    pausePlayButton.addEventListener('click', async () => {
+      await setPause(!isPaused);
+      await getBotStatus();
+    });
+    
+    // Terminate button
+    terminateButton.addEventListener('click', async () => {
+      if (confirm('Are you sure you want to terminate the bot?')) {
+        await setTerminate();
+        await getBotStatus();
+      }
+    });
+    
+    // Screenshot refresh button
+    refreshScreenshot.addEventListener('click', () => {
+      updateScreenshot();
+    });
+    
+    // Auto-refresh toggle
+    autoRefreshToggle.addEventListener('change', toggleAutoRefresh);
+    
+    // Refresh interval change
+    refreshInterval.addEventListener('change', () => {
+      if (autoRefreshTimerId) {
+        clearInterval(autoRefreshTimerId);
+        toggleAutoRefresh();
+      }
+    });
+
+    // ---------- Periodic Updates ----------
+    
+    // Update status every 2 seconds
+    setInterval(async () => {
+      await getBotStatus();
+      await getRuntime();
+    }, 2000);
+
+    // ---------- Initial Load ----------
+    
+    // Get initial status
+    (async function initialize() {
+      await getBotStatus();
+      await getRuntime();
+      updateScreenshot();
+    })();
+  </script>
+</body>
+</html>
