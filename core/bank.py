@@ -1,6 +1,8 @@
 from core.osrs_client import RuneLiteClient
 from core.item_db import ItemLookup
 from core import tools
+from core import ocr
+from core.logger import get_logger
 from PIL import Image
 import keyboard
 from core.input.mouse_control import ClickType
@@ -22,6 +24,7 @@ class BankInterface:
         self.client = client
         self.bank_match: tools.MatchResult = None
         self.last_custom_quanity = 0
+        self.log = get_logger('bank')
 
     @property
     def is_open(self):
@@ -31,6 +34,18 @@ class BankInterface:
         except:
             return False
         
+    @property
+    def bank_sc(self) -> Image.Image:
+        if not self.is_open: raise ValueError('Bank is not open')
+        return self.bank_match.crop_in(self.client.get_screenshot())
+    
+    def transform_to_client(self, match:tools.MatchResult) -> tools.MatchResult:
+        if not self.is_open: raise ValueError('Bank is not open')
+        return match.transform(
+            -self.bank_match.start_x,
+            -self.bank_match.start_y
+        )
+
     def deposit_inv(self):
         if not self.is_open: raise ValueError('Bank is not open')
         btn = self.client.find_in_window(
@@ -60,6 +75,36 @@ class BankInterface:
                 # potentially problematic
                 self.client.click(close_btn)
             return True
+    
+    def get_item_count(
+        self, 
+        item_id:str|int, 
+        min_confidence:float=0.9,
+        hover_verify:bool=True
+        
+        ) -> int:
+        if not self.is_open: raise ValueError('Bank is not open')
+
+        sc = self.client.get_screenshot()
+        
+        item = self.itemdb.get_item(item_id) # verify it exists
+        
+        if not item: raise ValueError(f'Item {item_id} not found in itemdb')
+
+        item_match = self.client.smart_find_item(
+            item=item,
+            parent_match=self.bank_match,
+            hover_verify=hover_verify,
+            ignore_count=True,
+            min_confidence=min_confidence
+        )
+        
+        if not item_match:
+            raise ValueError('Match not found')
+
+        return item.get_count(item_match, sc)
+
+        
         
     
     def smart_quantity(self, match:tools.MatchResult, amount:int, action:str):
@@ -78,8 +123,10 @@ class BankInterface:
                 self.client.choose_right_click_opt(f'{action}-All')
             else:
                 if self.last_custom_quanity == amount:
+                    self.log.info(f'Custom quantity match - {amount}')
                     self.client.choose_right_click_opt(f'{action}-{amount}')
                 else:
+                    self.log.info(f'Withdrawing custom amount: {amount}')
                     self.client.choose_right_click_opt(f'{action}-X')
                     time.sleep(random.uniform(1,1.3))
                     keyboard.write(str(amount),delay=.2)
@@ -131,7 +178,7 @@ class BankInterface:
         )
         likelihood = self.client.compare_hover_match(item.name)
 
-        print(f'Item {item.name} likelihood: {likelihood:.2f}')
+        self.log.info(f'Item {item.name} likelihood: {likelihood:.2f}')
         if likelihood < .6:
             raise ValueError(f'Item {item.name} not found in bank')
         
