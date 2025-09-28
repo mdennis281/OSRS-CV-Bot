@@ -13,14 +13,14 @@ https://github.com/user-attachments/assets/8d7b6eb6-8b16-466c-b32c-9fde9a23fa37
 https://github.com/user-attachments/assets/226daf47-361a-433d-89e3-dad1afb1c87a
 
 ### Websocket controller
-![Control UI](https://github.com/user-attachments/assets/c22cecd6-4a13-41e0-af44-196d6348a6df)
+![Control UI](https://github.com/user-attachments/assets/380ee7a5-6360-4994-a758-f2374041b562)
 ![Log UI](https://github.com/user-attachments/assets/a3856f32-1587-4916-b95e-d03f7991546c)
 
 
 ### Computer Vision Debugger
 
-![CV Debug](https://github.com/user-attachments/assets/380ee7a5-6360-4994-a758-f2374041b562)
 
+![CV Debug](https://github.com/user-attachments/assets/c22cecd6-4a13-41e0-af44-196d6348a6df)
 
  ## Why arent the docs better?
 
