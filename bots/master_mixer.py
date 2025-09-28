@@ -27,10 +27,10 @@ class BotConfig(BotConfigMixin):
     digweed_tile: RGBParam = RGBParam(0, 255, 255)
     hopper_tile: RGBParam = RGBParam(255, 0 , 40)
     ingredient_exclude: StringListParam = StringListParam(
-        [ 'aaa', 'mmm', 'mma', 'aam', 'ala' ] # 'mmm', 'mma',
+        []#['lll', 'all','mll'] #[ 'aaa', 'mmm', 'mma', 'aam' ] # 'mmm', 'mma',
     )
     digweed_potions: StringListParam = StringListParam(
-        ['Liplack liquor']
+        ["Marley's MoonLight"]
     )
 
 
