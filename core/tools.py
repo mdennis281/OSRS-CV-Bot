@@ -99,6 +99,7 @@ def find_subimages(
     scale_step: float = 0.1,
     method=cv2.TM_CCORR_NORMED,
     min_confidence: float = 0.5,
+    max_count: int = 9999
 ) -> List[MatchResult]:
     answers = []
     parent = parent.copy()
@@ -110,7 +111,7 @@ def find_subimages(
         scale_step=scale_step,
         method=method
     )
-    while m.confidence >= min_confidence:
+    while m.confidence >= min_confidence and max_count > len(answers):
         answers.append(m)
         # remove the found match from the parent image
         parent = m.remove_from(parent)
