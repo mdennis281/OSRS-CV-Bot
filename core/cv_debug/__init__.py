@@ -312,7 +312,7 @@ def enqueue_match(parent: Image.Image, template: Image.Image | tuple[int, int, i
         if (isinstance(template, tuple) or isinstance(template, list)) and len(template) == 3:
             # Create a 5x5 image with the given RGB color
             t = Image.new("RGB", (5, 5), template)
-            print('template color debug enqueue')
+            #print('template color debug enqueue')
         else:
             t = template.copy()
         m = match.copy() if hasattr(match, "copy") else match
