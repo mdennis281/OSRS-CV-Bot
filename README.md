@@ -1,6 +1,17 @@
 # auto_rs
  osrs automation using screenshots, template matching & OCR
 
+
+ ## Demos
+
+ ### Item Combiner
+ [item_combiner.py](./bots/item_combiner.py)
+ ![Image](https://github.com/user-attachments/assets/fc156ceb-8d87-4191-bf97-85e884b86972)
+
+ ### Rooftop Agility
+ [agility.py](./bots/agility.py)
+ ![Image](https://github.com/user-attachments/assets/226daf47-361a-433d-89e3-dad1afb1c87a)
+
  ## Why arent the docs better?
 
 I open sourced this for portfolio building, not script kiddies.
