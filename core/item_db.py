@@ -5,6 +5,9 @@ from core.logger import get_logger
 from PIL import Image
 from io import BytesIO
 import base64
+from core import tools
+from core import ocr
+from core.logger import get_logger
 
 @dataclass
 class Item:
@@ -24,6 +27,7 @@ class Item:
     lowalch: int
     highalch: int
     icon_b64: Optional[str] = None
+    log = get_logger('Item')
 
     @property
     def icon(self) -> Image.Image:
@@ -33,6 +37,38 @@ class Item:
         if self.icon_b64:
             return Image.open(BytesIO(base64.b64decode(self.icon_b64)))
         return None
+    
+    def get_count(self, item_match: tools.MatchResult, sc: Image.Image) -> int:
+        """
+        Extracts and returns the item count from the provided screenshot and match area.
+        """
+        center = item_match.get_center()
+
+        match = tools.MatchResult(
+            start_x=center[0]-14,
+            start_y=center[1]-30,
+            end_x=center[0]+25,
+            end_y=center[1]-5
+        )
+        #match.debug_draw(sc).show()
+        
+        scc = match.crop_in(sc)
+        num_img = tools.mask_colors(scc, [
+            (255, 255, 0), # < 100k
+            # TODO: actually handle these
+            # (255,255,255), # > 100k
+            # (0, 255, 128)  # > 10M
+        ], tolerance=5)
+
+        try:
+            return ocr.get_number(
+                num_img,
+                ocr.FontChoice.RUNESCAPE_PLAIN_11,
+            )
+        except Exception as e:
+            self.log.error(f'Failed to get count for item: {self.name} - {str(e)}')
+            match.debug_draw(sc).show()
+            return 0
 
 class ItemLookup:
     """
