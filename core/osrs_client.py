@@ -510,6 +510,92 @@ class RuneLiteClient(GenericWindow):
         match = match.transform(plane.start_x,plane.start_y)
 
         return match
+    
+    
+    def smart_find_item(
+        self,
+        item_identifier: str | int | None = None,
+        item: Item | None = None,
+        parent_match: MatchResult | None = None,
+        ignore_count: bool = False,
+        hover_verify: bool = False,
+        hover_verify_retry = 3,
+        min_confidence = .95,
+        raise_on_missing = False
+    ):
+        """
+        Robust item finding tool
+        
+        Args:
+            item_identifier: Lookup query in item db
+            parent_match: filter to search within (optional)
+            ignore_count: crop off the top pixels of the item searching for
+            hover_verify: verify the item we are looking for by hovering over it
+            hover_verify_retry: number of items to try verifying
+            min_confidence: min CV confidence threshold
+            raise_on_missing: raise if item is missing
+        """
+        if not item_identifier and not item:
+            raise ValueError('item_identifier or item must be defined')
+        if not item:
+            item = self.item_db.get_item(item_identifier)
+        
+        if not isinstance(item,Item):
+            raise ValueError(f'Item: {item_identifier} is not resolved.')
+        sc = self.get_screenshot()
+        count_pixels = 13
+        
+        if parent_match:
+            sc = parent_match.crop_in(sc)
+            
+        ico = item.icon
+        if ignore_count:
+            ico = ico.crop(
+                (0,count_pixels,ico.width,ico.height)
+            )
+        matches_to_find = hover_verify_retry if hover_verify else 1
+        options = tools.find_subimages(
+            parent=sc, template=ico,
+            min_confidence=min_confidence,
+            max_count=matches_to_find
+        )
+        
+
+        ans: MatchResult | None = None
+
+        for opt in options:
+            if hover_verify:
+                self.move_to(opt,parent_sectors=[parent_match])
+                time.sleep(.25)
+                text = self.get_action_hover()
+                score = tools.text_similarity(text,item.name)
+                if score > .7:
+                    ans = opt
+                    break
+                self.log.debug(f'Missed similarity threshold - {item.name} | {text} || {score}')
+                self.move_off_window()
+                
+            else:
+                ans = opt
+                break
+        
+        if not ans: 
+            if raise_on_missing:
+                raise ValueError(f'Cant find item {item.name}')
+            else:
+                return None
+
+        if parent_match:
+            ans = ans.transform(
+                parent_match.start_x,
+                parent_match.start_y
+            )
+        if ignore_count:
+            ans.start_x -= count_pixels
+        
+        return ans
+            
+        
 
     def get_item_cnt(
             self,
@@ -517,6 +603,7 @@ class RuneLiteClient(GenericWindow):
             tab: ToolplaneTab = ToolplaneTab.INVENTORY,
             min_confidence=0.97
         ):
+        """the count of the item in a single slot"""
         self.get_screenshot()
         top_crop = 13
         match = self.find_item(
@@ -528,7 +615,7 @@ class RuneLiteClient(GenericWindow):
         match.start_y = match.start_y - 5
         match.start_x = match.start_x - 3
         match.end_y = match.start_y + 15
-        match.end_x = match.start_x + 33
+        match.end_x = match.start_x + 35
 
         sc = match.crop_in(self.screenshot)
         num_img = tools.mask_colors(sc, [
@@ -541,7 +628,7 @@ class RuneLiteClient(GenericWindow):
         try:
             return ocr.get_number(
                 num_img,
-                ocr.FontChoice.RUNESCAPE_SMALL,
+                ocr.FontChoice.RUNESCAPE_PLAIN_11,
             )
         except Exception as e:
             self.log.error(f'Failed to get count for item: {item_identifier} - {str(e)}')
@@ -615,7 +702,7 @@ class RuneLiteClient(GenericWindow):
         ocr_match = ocr.find_string_bounds(
             menu,
             option,
-            lang=ocr.FontChoice.RUNESCAPE.value
+            lang=ocr.FontChoice.RUNESCAPE_BOLD_12.value
         )
         match = MatchResult(
             ocr_match['x1'],
@@ -630,7 +717,7 @@ class RuneLiteClient(GenericWindow):
         )
         
         self.click(match,rand_move_chance=0)
-
+        
 
     
     def debug_minimap(self,screenshot: Image.Image = None):
@@ -685,7 +772,7 @@ class RuneLiteClient(GenericWindow):
         if hover_info:
             ans = ocr.execute(
                 hover_info,
-                font=ocr.FontChoice.RUNESCAPE,
+                font=ocr.FontChoice.RUNESCAPE_BOLD_12,
                 psm=ocr.TessPsm.SINGLE_LINE,
                 raise_on_blank=False
             )
@@ -748,7 +835,7 @@ class RuneLiteClient(GenericWindow):
             )
             text = ocr.execute(
                 skill_img,
-                font=ocr.FontChoice.RUNESCAPE,
+                font=ocr.FontChoice.RUNESCAPE_PLAIN_12,
                 psm=ocr.TessPsm.SPARSE_TEXT,
                 raise_on_blank=False,
             )
@@ -1153,7 +1240,7 @@ class RuneLiteClient(GenericWindow):
         
         ocr_match = ocr.find_string_bounds(
             sc,text,
-            lang=ocr.FontChoice.RUNESCAPE.value
+            lang=ocr.FontChoice.RUNESCAPE_PLAIN_12.value
         )
         match = MatchResult(
             ocr_match['x1'],
@@ -1172,7 +1259,7 @@ class RuneLiteClient(GenericWindow):
 
         return ocr.execute(
             sc,
-            font=ocr.FontChoice.RUNESCAPE,
+            font=ocr.FontChoice.RUNESCAPE_PLAIN_12,
             psm=ocr.TessPsm.SPARSE_TEXT,
             raise_on_blank=False,
             preprocess=True
@@ -1235,7 +1322,7 @@ class RuneLiteClient(GenericWindow):
             )
             ans = ocr.execute(
                 action_txt,
-                font=ocr.FontChoice.RUNESCAPE_SMALL,
+                font=ocr.FontChoice.RUNESCAPE_PLAIN_11,
                 psm=ocr.TessPsm.SINGLE_LINE,
                 raise_on_blank=False,
                 preprocess=False
@@ -1482,7 +1569,7 @@ class MinimapContext:
     def get_minimap_stat(self,match: MatchResult, screenshot: Image.Image) -> int:
         """Returns the health value from the screenshot."""
         match = self.get_minimap_value_match(match)
-        return match.extract_number(screenshot, ocr.FontChoice.RUNESCAPE_SMALL)
+        return match.extract_number(screenshot, ocr.FontChoice.RUNESCAPE_PLAIN_11)
     @timeit
     def find_matches(self, screenshot: Image.Image):
         """Finds and sets the matches for health, prayer, run, and spec."""
