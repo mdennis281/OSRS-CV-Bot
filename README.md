@@ -6,10 +6,21 @@
 
  ### Item Combiner -  [item_combiner.py](./bots/item_combiner.py)
 
- ![Image](https://github.com/user-attachments/assets/fc156ceb-8d87-4191-bf97-85e884b86972)
+https://github.com/user-attachments/assets/8d7b6eb6-8b16-466c-b32c-9fde9a23fa37
 
  ### Rooftop Agility - [agility.py](./bots/agility.py)
+
 https://github.com/user-attachments/assets/226daf47-361a-433d-89e3-dad1afb1c87a
+
+### Websocket controller
+![Control UI](https://github.com/user-attachments/assets/c22cecd6-4a13-41e0-af44-196d6348a6df)
+![Log UI](https://github.com/user-attachments/assets/a3856f32-1587-4916-b95e-d03f7991546c)
+
+
+### Computer Vision Debugger
+
+![CV Debug](https://github.com/user-attachments/assets/380ee7a5-6360-4994-a758-f2374041b562)
+
 
  ## Why arent the docs better?
 
