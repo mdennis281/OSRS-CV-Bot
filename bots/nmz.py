@@ -17,8 +17,6 @@ OVERLOAD_LEN_MIN = 5.1
 
 class BotConfig(BotConfigMixin):
     # Configuration parameters
-    name: str = "NMZ Bot"
-    description: str = "A bot that manages NMZ prayer flicking, health, and absorption potions"
 
     # Main feature toggles
     manage_health: BooleanParam = BooleanParam(True)
@@ -60,6 +58,9 @@ class BotConfig(BotConfigMixin):
     chance_move_off_window: FloatParam = FloatParam(0.65)  # Chance to move off window during AFK mode
 
 class BotExecutor(Bot):
+    name: str = "NMZ Bot"
+    description: str = "A bot that manages NMZ prayer flicking, health, and absorption/overload potions"
+    
     def __init__(self, config: BotConfig, user=''):
         super().__init__(user, break_cfg=config.break_cfg)
         self.cfg: BotConfig = config

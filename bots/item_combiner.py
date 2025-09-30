@@ -14,9 +14,6 @@ control = ScriptControl()
 
 
 class BotConfig(BotConfigMixin):
-    name: str = "Item Combiner"
-    description: str = "Combines two items (e.g., Battlestaff + Water orb)."
-
     base_item_name: StringParam = StringParam("Battlestaff")
     second_item_name: StringParam = StringParam("Water orb")
     result_item_name: StringParam = StringParam("Water battlestaff")
@@ -33,6 +30,9 @@ class BotConfig(BotConfigMixin):
 
 
 class BotExecutor(Bot):
+    name: str = "Item Combiner"
+    description: str = "Combines two items (e.g., Battlestaff + Water orb)."
+    
     def __init__(self, config: BotConfig, user: str = ""):
         super().__init__(user, break_cfg=config.break_cfg)
         self.cfg: BotConfig = config
@@ -164,9 +164,9 @@ class BotExecutor(Bot):
         base = base_items[0 if first_item == base_name else -1]
         second = second_items[0 if first_item == second_name else -1]
         to_click = [base, second]
-        random.shuffle(to_click)
-        self.client.click(to_click[0])
+        #random.shuffle(to_click)
         self.client.click(to_click[1])
+        self.client.click(to_click[0])
         return base, second
 
     def _confirm_action(self):
@@ -182,7 +182,7 @@ class BotExecutor(Bot):
         start_time = time.time()
         last_progress = start_time
         max_wait = 120.0
-        stall_timeout = 12.0
+        stall_timeout = 6.0
         retriggered = False
 
         def crafted_so_far() -> int:
@@ -212,7 +212,7 @@ class BotExecutor(Bot):
             self.client.move_off_window()
 
             # Click the pair and confirm
-            base, second = self._click_pair(self.base_items, self.second_items, self.first_item)
+            self._click_pair(self.base_items, self.second_items, self.first_item)
             self._confirm_action()
             self.client.move_off_window()
 

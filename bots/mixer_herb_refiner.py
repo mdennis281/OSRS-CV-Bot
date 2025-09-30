@@ -21,8 +21,7 @@ import sys
 class BotConfig(BotConfigMixin):
     
     # Configuration parameters
-    name: str = "Mixer Herb Refiner"
-    description: str = "A bot that withdraws herbs from the bank, cleans them if grimy, and refines them."
+
 
     bank_tile: RGBParam = RGBParam(255, 255, 0)  # Yellow
     refiner_tile: RGBParam = RGBParam(0, 255, 0)  # Green
@@ -49,6 +48,9 @@ class BotConfig(BotConfigMixin):
     )
 
 class BotExecutor(Bot):
+    name: str = "Mixer Herb Refiner"
+    description: str = "A bot that withdraws herbs from the bank, cleans them if grimy, and refines them."
+    
     def __init__(self, config: BotConfig, user=''):
         super().__init__(user, break_cfg=config.break_cfg)
         self.cfg: BotConfig = config

@@ -18,8 +18,6 @@ import keyboard
 
 class BotConfig(BotConfigMixin): 
     # Configuration parameters
-    name: str = "Woodcutter Bot"
-    description: str = "A bot that chops trees and banks or drops logs when inventory is full"
 
     # Tree configuration
     tree_tiles: RGBListParam = RGBListParam([
@@ -68,6 +66,10 @@ class BotConfig(BotConfigMixin):
     
     
 class BotExecutor(Bot):
+    name: str = "Woodcutter Bot"
+    description: str = "A bot that chops trees and banks or drops logs when inventory is full"
+    
+    
     def __init__(self, config: BotConfig, user=''):
         super().__init__(user, break_cfg=config.break_cfg)
         self.cfg: BotConfig = config

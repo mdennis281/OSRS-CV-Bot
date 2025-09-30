@@ -16,9 +16,6 @@ import pyautogui
 
 class BotConfig(BotConfigMixin):
     # Configuration parameters
-    name: str = "Mastering Mixology Bot"
-    description: str = "A bot that plays Mastering Mixology"
-
 
     mixer_tile: RGBParam = RGBParam(255, 110, 50)
     station_tile: RGBParam = RGBParam(153, 255, 221)
@@ -43,6 +40,10 @@ class BotConfig(BotConfigMixin):
     
 
 class BotExecutor(Bot):
+    name: str = "Mastering Mixology Bot"
+    description: str = "A bot that plays Mastering Mixology"
+    
+    
     def __init__(self, config: BotConfig, user=''):
         super().__init__(user, break_cfg=config.break_cfg)
         self.cfg: BotConfig = config

@@ -14,9 +14,6 @@ import pyautogui
 
 class BotConfig(BotConfigMixin):
     # Configuration parameters
-    name: str = "High Alch Bot"
-    description: str = "A bot that performs high alchemy on a chosen item."
-
 
     alch_item: IntParam = IntParam(1396)  # Default to water battlestaff (noted)
     chance_change_point: FloatParam = FloatParam(0.08)
@@ -32,6 +29,10 @@ class BotConfig(BotConfigMixin):
     
 
 class BotExecutor(Bot):
+    name: str = "High Alch Bot"
+    description: str = "A bot that performs high alchemy on a chosen item."
+    
+    
     def __init__(self, config: BotConfig, user=''):
         super().__init__(user, break_cfg=config.break_cfg)
         self.cfg: BotConfig = config

@@ -12,8 +12,6 @@ control = ScriptControl()
 
 
 class BotConfig(BotConfigMixin):
-    name: str = "Rooftop Agility"
-    description: str = "Traverses rooftop agility courses, clicking next obstacles and looting marks of grace."
 
     # Tile colors (R, G, B)
     next_tile: RGBParam = RGBParam(0, 255, 100)
@@ -47,6 +45,9 @@ class BotConfig(BotConfigMixin):
 
 
 class BotExecutor(Bot):
+    name: str = "Rooftop Agility"
+    description: str = "Traverses rooftop agility courses, clicking next obstacles and looting marks of grace."
+    
     def __init__(self, config: BotConfig, user: str = ""):
         super().__init__(user, break_cfg=config.break_cfg)
         self.cfg: BotConfig = config

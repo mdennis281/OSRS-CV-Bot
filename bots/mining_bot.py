@@ -15,8 +15,6 @@ import sys
 
 class BotConfig(BotConfigMixin):
     # Configuration parameters
-    name: str = "Mining Bot"
-    description: str = "A bot that mines ores and banks them"
 
     # Bank and mining configuration
     bank_tile: RGBParam = RGBParam(0, 255, 0)  # Yellow by default
@@ -47,6 +45,10 @@ class BotConfig(BotConfigMixin):
     )
 
 class BotExecutor(Bot):
+    name: str = "Mining Bot"
+    description: str = "A bot that mines ores and banks them"
+    
+    
     def __init__(self, config: BotConfig, user=''):
         super().__init__(user, break_cfg=config.break_cfg)
         self.cfg: BotConfig = config

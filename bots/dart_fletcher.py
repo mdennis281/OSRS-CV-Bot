@@ -13,8 +13,6 @@ from core.logger import get_logger
 
 class BotConfig(BotConfigMixin):
     # Configuration parameters
-    name: str = "Dart Fletcher Bot"
-    description: str = "A bot that fletches darts by clicking dart tips and feathers, then pressing spacebar."
 
     item1: StringParam = StringParam("Mithril dart tip")
     item2: StringParam = StringParam("Feather")
@@ -36,6 +34,9 @@ class BotConfig(BotConfigMixin):
     )
 
 class BotExecutor(Bot):
+    name: str = "Dart Fletcher Bot"
+    description: str = "A bot that fletches darts by clicking dart tips and feathers, then pressing spacebar."
+    
     def __init__(self, config: BotConfig, user=''):
         super().__init__(user, break_cfg=config.break_cfg)
         self.cfg: BotConfig = config

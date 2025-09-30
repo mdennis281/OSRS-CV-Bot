@@ -34,8 +34,6 @@ control = ScriptControl()
 
 class BotConfig(BotConfigMixin):
     # Configuration parameters
-    name: str = "Motherload Miner Bot"
-    description: str = "A bot that mines in the Motherload Mine, deposits ore, collects processed ore, and banks it"
 
     # Ore vein tile colors
     vein_tile_1: RGBParam = RGBParam(255, 0, 0)
@@ -63,6 +61,10 @@ class BotConfig(BotConfigMixin):
     )
 
 class BotExecutor(Bot):
+    name: str = "Motherload Miner Bot"
+    description: str = "A bot that mines in the Motherload Mine, deposits ore, collects processed ore, and banks it"
+    
+    
     def __init__(self, config: BotConfig, user=''):
         super().__init__(user, break_cfg=config.break_cfg)
         self.cfg: BotConfig = config
@@ -142,27 +144,25 @@ class BotExecutor(Bot):
         self.log.info("Detecting current location...")
         
         try:
-            # Try to find the top/orange ladder
-            try:
-                self.client.smart_click_tile(
-                    self.cfg.down_ladder_tile.value,
-                    ['climb', 'ladder'],
-                    retry_hover=1,
-                    retry_match=1,
-                    click=False
+            tile = tools.find_color_box(
+                self.client.get_filtered_screenshot(),
+                self.cfg.down_ladder_tile.value,
+                tol=40
+            )
+            for x in range(3):
+                self.client.move_to(
+                    tile,
+                    rand_move_chance=0.1,
                 )
-                # If we can find and hover over the top ladder, we're upstairs
-                self.upstairs = True
-                self.log.info("Currently in the UPPER mining area.")
-                return True
-            except Exception:
-                # If we can't see the downward ladder, we must be downstairs
-                self.upstairs = False
-                self.log.info("Currently in the LOWER banking area.")
-                return True
-            
+                for t in self.client.get_hover_texts():
+                    if 'ladder' in t.lower() or 'climb' in t.lower():
+                        self.upstairs = True
+                        return True
+            self.upstairs = False
+            return False
         except Exception as e:
             self.log.error(f"Error detecting location: {e}")
+            self.upstairs = False
             return False
     
     @control.guard
@@ -231,6 +231,8 @@ class BotExecutor(Bot):
                 self.log.warning(f"Failed to find ore vein ({fail_count}/{self.cfg.max_retries.value})")
                 if fail_count >= self.cfg.max_retries.value:
                     self.log.error("Too many failures. Giving up mining cycle.")
+                    self.deposit_paydirt()
+                    self.climb_down_ladder()
                     return False
                 time.sleep(self.cfg.fail_retry_delay.value)
         
