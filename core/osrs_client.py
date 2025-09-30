@@ -37,6 +37,25 @@ control = ScriptControl()
 POSITION_STATE = Image.open('data/ui/player-position-state.png')
 ACTION_HOVER = Image.open('data/ui/action-hover.png')
 
+# Centralized randomness configuration for user interaction behavior
+@dataclass
+class InteractionRandomness:
+    """Default/random behavior tuning for mouse movement and clicks.
+
+    Attributes:
+        rand_move_chance: Probability to make a small random move before an action.
+        after_click_settle_chance: Probability to pause briefly after a click.
+        after_click_settle_sleep: Range (min,max) seconds for post-click settle sleep.
+        off_window_offset: Default pixel offset used by move_off_window.
+    """
+    rand_move_chance: float = 0.1
+    after_click_settle_chance: float = 0.1
+    after_click_settle_sleep: tuple[float, float] = (0.2, 0.6)
+    off_window_offset: int = 45
+
+    def settle_sleep(self) -> float:
+        return random.uniform(self.after_click_settle_sleep[0], self.after_click_settle_sleep[1])
+
 # Enums for toolplane tabs and minimap elements
 class ToolplaneTab(Enum):
     """Represents the tabs in the RuneLite toolplane."""
@@ -63,12 +82,14 @@ class MinimapElement(Enum):
 
 class GenericWindow:
     """Represents a generic window with functionality to interact with it."""
-    def __init__(self, window_title: str):
+    def __init__(self, window_title: str, randomness: InteractionRandomness | None = None):
         """
         Initialize the GenericWindow instance.
 
         Args:
             window_title (str): The title of the window to interact with.
+            randomness (InteractionRandomness | None): Optional behavior config to
+                tune default random movement/click behavior.
         """
         self.log = get_logger('GenericWindow')
         self.window_title = window_title
@@ -76,6 +97,8 @@ class GenericWindow:
         self._last_screenshot: Image.Image = None
         self.window_manager = WindowManager.create()
         self.update_window()
+        # Default/random behavior settings
+        self.randomness: InteractionRandomness = randomness or InteractionRandomness()
 
     def update_window(self):
         """
@@ -203,15 +226,19 @@ class GenericWindow:
             # Use the platform-specific implementation from the window manager
             self.window.bring_to_focus()
 
-    def move_off_window(self, offset=45):
+    def move_off_window(self, offset: int | None = None):
         """
         Randomly moves the window slightly outside the screen in a random direction.
 
         Args:
-            offset (int, optional): Offset in pixels for the movement.
+            offset (int | None): Offset in pixels for the movement. If None, uses
+                InteractionRandomness.off_window_offset.
         """
         if not self.is_open:
             return
+
+        if offset is None:
+            offset = self.randomness.off_window_offset
 
         directions = ["up", "down", "left", "right"]
         direction = np.random.choice(directions)
@@ -326,7 +353,7 @@ class GenericWindow:
     
     @control.guard
     def move_to(self,match: MatchResult | Tuple[int], 
-                rand_move_chance:float=0.4,
+                rand_move_chance: float | None = None,
                 translated=False, parent_sectors: List[MatchResult]=[]):
         
         
@@ -344,7 +371,8 @@ class GenericWindow:
             y += self.window.top
 
         # move the mouse around a bit
-        if random.random() < rand_move_chance:
+        chance = self.randomness.rand_move_chance if rand_move_chance is None else rand_move_chance
+        if random.random() < chance:
             self.move_to(self.window_match,translated=True)
             
         move_to(x,y)
@@ -354,7 +382,7 @@ class GenericWindow:
             self, match: MatchResult | Tuple[int], 
             click_cnt:int=1, min_click_interval: float = 0.3, 
             click_type=ClickType.LEFT, parent_sectors: List[MatchResult]=[],
-            rand_move_chance:float=.4, after_click_settle_chance=.4):
+            rand_move_chance: float | None = None, after_click_settle_chance: float | None = None):
         """Clicks on the center of the matched area."""
 
         # subimage in subimage, revert back to sc match
@@ -375,6 +403,12 @@ class GenericWindow:
             x,y = match.get_point_within()
 
 
+        # Resolve configured defaults
+        rand_move_chance = self.randomness.rand_move_chance if rand_move_chance is None else rand_move_chance
+        after_click_settle_chance = (
+            self.randomness.after_click_settle_chance if after_click_settle_chance is None else after_click_settle_chance
+        )
+
         self.move_to((x,y),rand_move_chance, translated=True) 
         click(
             -1,-1,
@@ -383,7 +417,7 @@ class GenericWindow:
             min_click_interval=min_click_interval,
         )
         if random.random() < after_click_settle_chance:
-            time.sleep(random.uniform(.2,.6))
+            time.sleep(self.randomness.settle_sleep())
             self.move_to(self.window_match)
             
 
@@ -392,9 +426,9 @@ class GenericWindow:
 
 
 class RuneLiteClient(GenericWindow):
-    def __init__(self,username=''):
+    def __init__(self,username='', randomness: InteractionRandomness | None = None):
         start_time = time.time()
-        super().__init__(f'RuneLite - {username}')
+        super().__init__(f'RuneLite - {username}', randomness=randomness)
         self.log = get_logger('RLClient')
         self.log.info('Initializing RuneLite client...')
         
@@ -1279,6 +1313,7 @@ class RuneLiteClient(GenericWindow):
                 ACTION_HOVER.width - 10, 0, 
                 ACTION_HOVER.width, ACTION_HOVER.height
             ))
+
             c_x, c_y = self.mouse_position()
             sc = self.get_screenshot()
 
