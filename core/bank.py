@@ -17,6 +17,8 @@ BANK_DEPO_INV = Image.open('data/ui/bank-deposit-inv.png')
 BANK_SEARCH = Image.open('data/ui/bank-search.png')
 BANK_CLOSE = Image.open('data/ui/close-ui-element.png')
 BANK_TAB = Image.open('data/ui/bank-tab.png')
+BANK_ARROW_UP = Image.open('data/ui/bank-scroll-up.png')
+BANK_ARROW_DOWN = BANK_ARROW_UP.rotate(180)
 
 class BankInterface:
     def __init__(self,client:RuneLiteClient,itemdb:ItemLookup):
