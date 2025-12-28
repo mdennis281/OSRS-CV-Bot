@@ -1,7 +1,7 @@
 # Old-school RuneScape Computer Vision Bot
 A vibe coding experiment that has grown into a pretty impressive botting framework.
 
- > Offically supporting **Windows** only, sorry
+ > Offically support for **Windows** only, sorry
 
 
  ## Demos
