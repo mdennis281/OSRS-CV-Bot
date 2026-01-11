@@ -648,10 +648,15 @@ window.displayItemPickerResults = function(items, paramName, modal) {
     resultsContainer.innerHTML = items.map(item => {
         const escapedName = escapeHtml(item.name);
         const escapedForClick = escapeForAttr(item.name);
+        // We attach data-icon to the element so we can retrieve it safely in the click handler
+        // rather than passing a potentially huge/complex string in the onclick attribute.
+        const iconData = item.icon_b64 || '';
+        
         return `
         <div class="card mb-2 item-picker-result" 
              style="cursor: pointer; transition: all 0.2s ease;" 
-             onclick="selectItemForParam('${paramName}', ${item.id}, '${escapedForClick}', modal)">
+             data-icon="${iconData}"
+             onclick="selectItemForParam('${paramName}', '${item.id}', '${escapedForClick}', this.getAttribute('data-icon'))">
             <div class="card-body py-2">
                 <div class="d-flex align-items-center">
                     <div class="me-3">
@@ -696,24 +701,93 @@ window.displayItemPickerResults = function(items, paramName, modal) {
 };
 
 // Global function to select an item and update the form
-window.selectItemForParam = function(paramName, itemId, itemName, modal) {
+window.selectItemForParam = function(paramName, itemId, itemName, iconB64) {
+    console.log('[Debug] selectItemForParam called', { paramName, itemId, itemName });
+
     // Update the form fields
-    const nameInput = document.querySelector(`input[name="${paramName}_name"]`);
-    const idInput = document.querySelector(`input[name="${paramName}_id"]`);
+    const nameSelector = `input[name="${paramName}_name"]`;
+    const idSelector = `input[name="${paramName}_id"]`;
+    const nameInput = document.querySelector(nameSelector);
+    const idInput = document.querySelector(idSelector);
     
-    if (nameInput) nameInput.value = itemName;
-    if (idInput) idInput.value = itemId;
-    
-    // Visual feedback
+    console.log('[Debug] Looking for inputs:', { nameSelector, idSelector, foundName: !!nameInput, foundId: !!idInput });
+
     if (nameInput) {
-        nameInput.style.borderColor = 'var(--success-color)';
-        setTimeout(() => {
-            nameInput.style.borderColor = '';
-        }, 2000);
+        nameInput.value = itemName;
+        // Flash effect
+        nameInput.style.transition = 'background-color 0.5s';
+        nameInput.style.backgroundColor = 'rgba(40, 167, 69, 0.3)';
+        setTimeout(() => nameInput.style.backgroundColor = '', 500);
+
+        // Try to update the visual display if it exists
+        // Find the wrapper (closest .item-param-container)
+        const wrapper = nameInput.closest('.item-param-container');
+        if (wrapper) {
+            let displayDiv = wrapper.querySelector('.current-item-display');
+            
+            // If we have an icon, we should show the display div
+            if (iconB64) {
+                if (!displayDiv) {
+                    // Create it if it doesn't exist
+                    displayDiv = document.createElement('div');
+                    displayDiv.className = 'current-item-display mb-2 p-2 bg-dark rounded border';
+                    // Insert before the input group
+                    const inputGroup = wrapper.querySelector('.input-group');
+                    if (inputGroup) {
+                        wrapper.insertBefore(displayDiv, inputGroup);
+                    }
+                }
+                
+                // Update content
+                displayDiv.innerHTML = `
+                    <div class="d-flex align-items-center">
+                        <img src="data:image/png;base64,${iconB64}" 
+                             class="item-param-icon me-2" 
+                             alt="${itemName} icon"
+                             style="width: 32px; height: 32px; object-fit: contain;">
+                        <div>
+                            <div class="fw-bold">${itemName}</div>
+                            <div class="text-muted small">ID: ${itemId}</div>
+                        </div>
+                    </div>
+                `;
+            } else if (displayDiv) {
+                // If no icon but we have a display div, update text or maybe hide it? 
+                // Usually items have icons. If not, we still update text.
+                 displayDiv.innerHTML = `
+                    <div class="d-flex align-items-center">
+                        <div class="item-param-icon me-2 d-flex align-items-center justify-content-center" style="width: 32px; height: 32px; background: #333; border-radius: 4px;">
+                             <i class="fas fa-question text-muted" style="font-size: 0.8rem;"></i>
+                        </div>
+                        <div>
+                            <div class="fw-bold">${itemName}</div>
+                            <div class="text-muted small">ID: ${itemId}</div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+    } else {
+        console.error('[Error] Could not find name input for param:', paramName);
+    }
+
+    if (idInput) {
+        idInput.value = itemId;
+    } else {
+        console.error('[Error] Could not find ID input for param:', paramName);
     }
     
     // Close modal
-    modal.hide();
+    const modalEl = document.getElementById('itemPickerModal');
+    if (modalEl) {
+        const instance = bootstrap.Modal.getInstance(modalEl);
+        if (instance) {
+            instance.hide();
+        } else {
+             const closeBtn = modalEl.querySelector('.btn-close');
+             if(closeBtn) closeBtn.click();
+        }
+    }
     
     // Show success message - use textContent to safely insert itemName
     const message = document.createElement('div');
@@ -861,121 +935,9 @@ window.openItemPicker = window.openItemPicker || function(paramName, initialQuer
     }
 };
 
-window.displayItemPickerResults = window.displayItemPickerResults || function(items, paramName, modal) {
-    console.log('displayItemPickerResults called with', items.length, 'items for', paramName);
-    const resultsContainer = document.getElementById('itemPickerResults');
-    
-    if (items.length === 0) {
-        resultsContainer.innerHTML = '<div class="text-center py-4 text-muted">No items found</div>';
-        return;
-    }
-    
-    // Helper to escape HTML in item names  
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-    
-    // Helper to escape for onclick attribute
-    function escapeForAttr(text) {
-        return text.replace(/&/g, '&amp;').replace(/'/g, '&#39;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    }
-    
-    resultsContainer.innerHTML = items.map(item => {
-        const escapedName = escapeHtml(item.name);
-        const escapedForClick = escapeForAttr(item.name);
-        return `
-        <div class="card mb-2 item-picker-result" 
-             style="cursor: pointer; transition: all 0.2s ease;" 
-             onclick="window.selectItemForParam('${paramName}', ${item.id}, '${escapedForClick}', arguments[0])">
-            <div class="card-body py-2">
-                <div class="d-flex align-items-center">
-                    <div class="me-3">
-               ${item.icon_b64 ? 
-                `<img src="data:image/png;base64,${item.icon_b64}" 
-                      style="width: 24px; height: 24px; object-fit: contain; 
-                          background: #1a1a1a; border-radius: 4px; padding: 2px;"
-                      alt="${escapedName}">` : 
-                            `<div style="width: 24px; height: 24px; background: #333; border-radius: 4px; 
-                                        display: flex; align-items: center; justify-content: center;">
-                                <i class="fas fa-cube text-muted" style="font-size: 12px;"></i>
-                             </div>`}
-                    </div>
-                    <div class="flex-grow-1">
-                        <div class="fw-bold">${escapedName}</div>
-                        <div class="text-muted small">ID: ${item.id}</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;}).join('');
-    
-    // Add hover effects
-    document.querySelectorAll('.item-picker-result').forEach(result => {
-        result.addEventListener('mouseenter', function() {
-            this.style.backgroundColor = 'rgba(77, 171, 247, 0.1)';
-            this.style.borderColor = 'var(--primary-color)';
-        });
-        result.addEventListener('mouseleave', function() {
-            this.style.backgroundColor = '';
-            this.style.borderColor = '';
-        });
-        result.addEventListener('click', function() {
-            window.selectItemForParam(paramName, 
-                this.querySelector('.text-muted').textContent.replace('ID: ', ''),
-                this.querySelector('.fw-bold').textContent,
-                modal);
-        });
-    });
-};
+// (Duplicate displayItemPickerResults removed)
 
-window.selectItemForParam = window.selectItemForParam || function(paramName, itemId, itemName, modal) {
-    console.log('selectItemForParam called:', paramName, itemId, itemName);
-    
-    // Update the form fields
-    const nameInput = document.querySelector(`input[name="${paramName}_name"]`);
-    const idInput = document.querySelector(`input[name="${paramName}_id"]`);
-    
-    if (nameInput) nameInput.value = itemName;
-    if (idInput) idInput.value = itemId;
-    
-    // Visual feedback
-    if (nameInput) {
-        nameInput.style.borderColor = '#28a745';
-        setTimeout(() => {
-            nameInput.style.borderColor = '';
-        }, 2000);
-    }
-    
-    // Close modal
-    if (modal && modal.hide) {
-        modal.hide();
-    } else {
-        // Fallback: find and close modal
-        const modalElement = document.getElementById('itemPickerModal');
-        if (modalElement) {
-            const modalInstance = bootstrap.Modal.getInstance(modalElement);
-            if (modalInstance) modalInstance.hide();
-        }
-    }
-    
-    // Show success message
-    const message = document.createElement('div');
-    message.className = 'alert alert-success position-fixed';
-    message.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
-    message.innerHTML = `
-        <i class="fas fa-check-circle"></i> 
-        Selected: <strong>${itemName}</strong> for ${paramName}
-    `;
-    document.body.appendChild(message);
-    
-    setTimeout(() => {
-        if (message.parentNode) {
-            message.parentNode.removeChild(message);
-        }
-    }, 3000);
-};
+// (Duplicate selectItemForParam removed)
 
 // Debug: Log that functions are loaded
 console.log('Item picker functions loaded:', {
@@ -1052,177 +1014,7 @@ console.log('Item picker functions loaded:', {
 <!-- Final function override to ensure they work -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Force define global functions if they don't exist
-    if (typeof window.searchItem === 'undefined') {
-        window.searchItem = function(paramName) {
-            console.log('searchItem override called for:', paramName);
-            const currentName = document.querySelector(`input[name="${paramName}_name"]`).value || '';
-            
-            // Create and show modal
-            const modalId = 'itemPickerModal_' + paramName;
-            const existingModal = document.getElementById(modalId);
-            if (existingModal) existingModal.remove();
-            
-            const modalHtml = `
-                <div class="modal fade" id="${modalId}" tabindex="-1">
-                    <div class="modal-dialog modal-lg">
-                        <div class="modal-content bg-dark text-white">
-                            <div class="modal-header">
-                                <h5 class="modal-title">
-                                    <i class="fas fa-search"></i> Select Item for ${paramName}
-                                </h5>
-                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                            </div>
-                            <div class="modal-body">
-                                <div class="mb-3">
-                                    <input type="text" class="form-control" id="itemSearch_${paramName}" 
-                                           placeholder="Search for items..." value="${currentName}">
-                                </div>
-                                <div id="searchStatus_${paramName}" class="text-muted small mb-3">
-                                    Enter a search term to find items
-                                </div>
-                                <div id="searchResults_${paramName}" style="max-height: 400px; overflow-y: auto;">
-                                    <!-- Results will appear here -->
-                                </div>
-                            </div>
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-            
-            document.body.insertAdjacentHTML('beforeend', modalHtml);
-            
-            const modal = new bootstrap.Modal(document.getElementById(modalId));
-            const searchInput = document.getElementById(`itemSearch_${paramName}`);
-            let searchTimeout = null;
-            
-            function performSearch() {
-                const query = searchInput.value.trim();
-                if (!query) {
-                    document.getElementById(`searchResults_${paramName}`).innerHTML = '';
-                    document.getElementById(`searchStatus_${paramName}`).textContent = 'Enter a search term to find items';
-                    return;
-                }
-                
-                document.getElementById(`searchStatus_${paramName}`).innerHTML = '<i class="fas fa-spinner fa-spin"></i> Searching...';
-                
-                fetch(`/api/items/search?q=${encodeURIComponent(query)}&limit=20`)
-                    .then(response => response.json())
-                    .then(data => {
-                        // Normalize backend response to items array
-                        const items = (data && data.success && Array.isArray(data.results)) ? data.results : [];
-                        const resultsDiv = document.getElementById(`searchResults_${paramName}`);
-                        const statusDiv = document.getElementById(`searchStatus_${paramName}`);
-                        
-                        // Helper to escape HTML in item names
-                        function escapeHtml(text) {
-                            const div = document.createElement('div');
-                            div.textContent = text;
-                            return div.innerHTML;
-                        }
-                        
-                        // Helper to escape for onclick attribute
-                        function escapeForOnclick(text) {
-                            return text.replace(/'/g, "\\'").replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                        }
-
-                        if (items && items.length > 0) {
-                            statusDiv.textContent = `Found ${items.length} items`;
-                            resultsDiv.innerHTML = items.map(item => {
-                                const escapedName = escapeHtml(item.name);
-                                const escapedForAttr = escapeForOnclick(item.name);
-                                return `
-                                <div class="card mb-2" style="cursor: pointer; background: #2d3748;" 
-                                     onclick="window.selectItem_${paramName}(${item.id}, '${escapedForAttr}')">
-                                    <div class="card-body py-2">
-                                        <div class="d-flex align-items-center">
-                                            <div class="me-3">
-                                                ${item.icon_b64 ? 
-                                                    `<img src="data:image/png;base64,${item.icon_b64}" 
-                                                          style="width: 24px; height: 24px; object-fit: contain; 
-                                                                 background: #1a1a1a; border-radius: 4px; padding: 2px;"
-                                                          alt="${escapedName}">` : 
-                                                    `<div style="width: 24px; height: 24px; background: #333; 
-                                                                border-radius: 4px; display: flex; align-items: center; 
-                                                                justify-content: center;">
-                                                        <i class="fas fa-cube text-muted" style="font-size: 12px;"></i>
-                                                     </div>`}
-                                            </div>
-                                            <div>
-                                                <div class="fw-bold text-white">${escapedName}</div>
-                                                <div class="text-muted small">ID: ${item.id}</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            `;}).join('');
-                            
-                            // Create selection function for this parameter
-                            window[`selectItem_${paramName}`] = function(itemId, itemName) {
-                                const nameInput = document.querySelector(`input[name="${paramName}_name"]`);
-                                const idInput = document.querySelector(`input[name="${paramName}_id"]`);
-                                
-                                if (nameInput) nameInput.value = itemName;
-                                if (idInput) idInput.value = itemId;
-                                
-                                if (nameInput) {
-                                    nameInput.style.borderColor = '#28a745';
-                                    setTimeout(() => nameInput.style.borderColor = '', 2000);
-                                }
-                                
-                                modal.hide();
-                                
-                                // Success message - escape HTML safely
-                                const msg = document.createElement('div');
-                                msg.className = 'alert alert-success position-fixed';
-                                msg.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
-                                const checkIcon = document.createElement('i');
-                                checkIcon.className = 'fas fa-check';
-                                const strong = document.createElement('strong');
-                                strong.textContent = itemName;
-                                msg.appendChild(checkIcon);
-                                msg.appendChild(document.createTextNode(' Selected: '));
-                                msg.appendChild(strong);
-                                document.body.appendChild(msg);
-                                setTimeout(() => msg.remove(), 3000);
-                            };
-                        } else {
-                            statusDiv.textContent = 'No items found';
-                            resultsDiv.innerHTML = '<div class="text-center py-4 text-muted">No items found</div>';
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Search failed:', error);
-                        document.getElementById(`searchStatus_${paramName}`).innerHTML = 
-                            '<span class="text-danger"><i class="fas fa-exclamation-triangle"></i> Search failed</span>';
-                    });
-            }
-            
-            searchInput.addEventListener('input', function() {
-                clearTimeout(searchTimeout);
-                searchTimeout = setTimeout(performSearch, 300);
-            });
-            
-            searchInput.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    clearTimeout(searchTimeout);
-                    performSearch();
-                }
-            });
-            
-            modal.show();
-            setTimeout(() => searchInput.focus(), 100);
-            
-            if (currentName) {
-                setTimeout(performSearch, 100);
-            }
-        };
-        
-        console.log('searchItem function defined successfully');
-    }
+    // (Duplicate logic removed)
 });
 </script>
 
