@@ -26,6 +26,7 @@ import asyncio
 import websockets
 from datetime import datetime
 
+
 from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
 from flask_cors import CORS
 
@@ -33,6 +34,7 @@ from flask_cors import CORS
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
+from core.item_db import ItemLookup
 from bots.core.config import BotConfigMixin
 from bots.core.cfg_types import TYPES as CFG_TYPES
 from core.logger import get_logger
@@ -249,7 +251,6 @@ def send_websocket_notification(message: str, message_type: str = "info"):
                     loop.close()
                 except Exception as e:
                     log.debug(f"Failed to send WebSocket notification: {e}")
-            
             threading.Thread(target=send_async, daemon=True).start()
     except Exception as e:
         log.debug(f"Failed to get WebSocket port for notification: {e}")
@@ -271,9 +272,8 @@ async def _send_websocket_message(port: int, message: str, message_type: str):
 def bot_monitoring_thread():
     """Background thread that monitors running bots for termination"""
     global monitoring_active, current_bot
-    
+
     log.info("Bot monitoring thread started")
-    
     while monitoring_active:
         try:
             if current_bot:
@@ -597,7 +597,38 @@ def api_get_bot_config(bot_id: str):
     if not bot_info:
         return jsonify({'error': 'Bot not found'}), 404
     
-    return jsonify(bot_info['default_config'])
+    # Return the current configuration parameters, not default_config
+    # config_params holds the current state including loaded values
+    return jsonify(bot_info.get('config_params', {}))
+
+CONFIG_DIR = project_root / "data" / "configs"
+
+def _save_bot_config_to_disk(bot_id: str, config_data: Dict[str, Any]) -> bool:
+    """Save bot configuration to disk"""
+    try:
+        if not CONFIG_DIR.exists():
+            CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+            
+        config_file = CONFIG_DIR / f"{bot_id}.json"
+        with open(config_file, 'w') as f:
+            json.dump(config_data, f, indent=2)
+        return True
+    except Exception as e:
+        log.error(f"Failed to save config for bot {bot_id}: {e}")
+        return False
+
+def _load_bot_config_from_disk(bot_id: str) -> Optional[Dict[str, Any]]:
+    """Load bot configuration from disk"""
+    try:
+        config_file = CONFIG_DIR / f"{bot_id}.json"
+        if not config_file.exists():
+            return None
+            
+        with open(config_file, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        log.error(f"Failed to load config for bot {bot_id}: {e}")
+        return None
 
 @app.route('/api/bot/<bot_id>/config', methods=['POST'])
 def api_save_bot_config(bot_id: str):
@@ -610,10 +641,63 @@ def api_save_bot_config(bot_id: str):
     if not config_data:
         return jsonify({'error': 'No configuration provided'}), 400
     
-    # TODO: Validate configuration against bot's parameters
-    # TODO: Save configuration to file
+    # Validate against known params
+    current_params = bot_info.get('config_params', {})
     
-    return jsonify({'success': True})
+    # Update in-memory registry
+    for key, value in config_data.items():
+        if key in current_params:
+            # Handle structured vs raw values
+            current_param = current_params[key]
+            
+            # Check if we're dealing with our standard parameter structure
+            if isinstance(current_param, dict) and 'type' in current_param and 'value' in current_param:
+                # If incoming value is also structured (like Item, BreakCfg, Range), extract the value
+                if isinstance(value, dict) and 'type' in value and 'value' in value:
+                    current_param['value'] = value['value']
+                else:
+                    # Incoming value is raw (Int, String, Bool), just update the value field
+                    current_param['value'] = value
+            else:
+                # Fallback for unstructured parameters (shouldn't happen with current system)
+                current_params[key] = value
+            
+    # Save to disk
+    if _save_bot_config_to_disk(bot_id, current_params):
+        log.info(f"Configuration saved for bot {bot_id}")
+        return jsonify({'success': True})
+    else:
+        return jsonify({'error': 'Failed to save configuration to disk'}), 500
+
+@app.route('/api/bot/<bot_id>/reset', methods=['POST'])
+def api_reset_bot_config(bot_id: str):
+    """API endpoint to reset bot configuration to defaults"""
+    bot_info = bot_registry.get(bot_id)
+    if not bot_info:
+        return jsonify({'error': 'Bot not found'}), 404
+    
+    try:
+        # Get the config class
+        config_class = bot_info.get('config_class')
+        if not config_class:
+            return jsonify({'error': 'Config class not found'}), 500
+            
+        # Re-extract parameters from the class (this gets the defaults from code)
+        default_params = BotDiscovery._extract_config_params(config_class)
+        
+        # Update registry
+        bot_info['config_params'] = default_params
+        
+        # Save to disk to persist the reset
+        if _save_bot_config_to_disk(bot_id, default_params):
+            log.info(f"Configuration reset to defaults for bot {bot_id}")
+            return jsonify({'success': True})
+        else:
+            return jsonify({'error': 'Failed to save reset configuration to disk'}), 500
+            
+    except Exception as e:
+        log.error(f"Error resetting config for bot {bot_id}: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/logging/port')
 def api_logging_port():
@@ -726,18 +810,15 @@ def api_items_search():
 @app.route('/api/items/<int:item_id>')
 def api_item_detail(item_id):
     """API endpoint for getting detailed item information"""
-    from core.item_db import ItemLookup
     
     try:
         item_lookup = ItemLookup()
         item = item_lookup.get_item_by_id(item_id)
-        
         if not item:
             return jsonify({
                 'success': False,
                 'error': f'Item with ID {item_id} not found'
             }), 404
-        
         return jsonify({
             'success': True,
             'item': {
@@ -788,6 +869,44 @@ def initialize_app():
     bot_registry = BotDiscovery.discover_bots()
     log.info(f"Discovered {len(bot_registry)} bots: {list(bot_registry.keys())}")
     
+    # Load saved configurations
+    log.info("Loading saved configurations...")
+    for bot_id, bot_info in bot_registry.items():
+        saved_config = _load_bot_config_from_disk(bot_id)
+        if saved_config:
+            # Merge saved config into current params
+            current_params = bot_info.get('config_params', {})
+            for key, value in saved_config.items():
+                if key in current_params:
+                    # Self-healing: Re-hydrate Item parameters to ensure icons/names are present
+                    # This fixes issues where saved config might only have IDs or stale metadata
+                    if isinstance(value, dict) and value.get('type') == 'Item':
+                        item_data = value.get('value', {})
+                        if isinstance(item_data, dict) and 'id' in item_data:
+                            try:
+                                from core.item_db import ItemLookup
+                                # Singleton lookup is fast
+                                item = ItemLookup().get_item_by_id(item_data['id'])
+                                if item:
+                                    # Fully refresh the item metadata
+                                    value['value'] = {
+                                        'id': item.id,
+                                        'name': item.name,
+                                        'icon_b64': item.icon_b64,
+                                        'stackable': item.stackable,
+                                        'equipable': item.equipable,
+                                        'tradeable_on_ge': item.tradeable_on_ge,
+                                        'members': item.members,
+                                        'cost': item.cost,
+                                        'highalch': item.highalch,
+                                        'lowalch': item.lowalch
+                                    }
+                            except Exception as e:
+                                log.warning(f"Failed to re-hydrate item {key} for bot {bot_id}: {e}")
+
+                    current_params[key] = value
+            log.info(f"Loaded config for {bot_id}")
+
     # Start the WebSocket logging server
     log.info("Starting WebSocket logging server...")
     from core.logger import ensure_websocket_server_started

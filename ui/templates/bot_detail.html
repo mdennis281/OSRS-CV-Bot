@@ -148,6 +148,8 @@
                                                    placeholder="Item name" readonly>
                                             <input type="hidden" name="{{ param_name }}_id" 
                                                    value="{{ param_info.value.id if param_info.value else '' }}">
+                                            <input type="hidden" name="{{ param_name }}_icon" 
+                                                   value="{{ param_info.value.icon_b64 if param_info.value and param_info.value.icon_b64 else '' }}">
                                             <button class="btn btn-outline-primary" type="button" 
                                                     onclick="searchItem('{{ param_name }}')">
                                                 <i class="fas fa-search"></i> Browse Items
@@ -285,9 +287,7 @@ window.startBot = window.startBot || function() {
     alert('Bot start function not fully loaded. Please refresh the page.');
 };
 
-console.log('Bot detail script loading...');
 const botId = '{{ bot.id }}';
-console.log('Bot ID:', botId);
 let statusUpdateInterval;
 
 // Start status updates if bot is running
@@ -297,21 +297,16 @@ statusUpdateInterval = setInterval(updateBotStatus, 2000);
 
 // Attach click listener for start bot button (robust for when script runs before/after DOMContentLoaded)
 function attachStartButtonListener() {
-    console.log('Attaching start button listener...');
     const startButton = document.getElementById('start-bot-btn');
     if (startButton) {
         // Avoid adding multiple listeners
         if (!startButton.dataset.listenerAttached) {
             startButton.addEventListener('click', function(e) {
-                console.log('Start button clicked via event listener!');
                 e.preventDefault();
                 startBot();
             });
             startButton.dataset.listenerAttached = '1';
-            console.log('Start button listener attached');
         }
-    } else {
-        console.log('Start button not found when attempting to attach listener');
     }
 }
 
@@ -346,29 +341,17 @@ let startingBot = false;
 // Main startBot implementation - also assign to window to ensure global access
 window.startBot = function startBot() {
     try {
-        console.log('startBot() called');
-
-        if (startingBot) {
-            console.log('Bot is already being started, ignoring duplicate call');
-            return;
-        }
+        if (startingBot) return;
 
         startingBot = true;
-        console.log('botId:', botId);
-
         const config = gatherConfiguration();
-        console.log('config:', config);
-
         const usernameEl = document.getElementById('username');
         const username = usernameEl ? usernameEl.value : '';
-        console.log('username:', username);
 
         const requestData = {
             config: config,
             username: username
         };
-        console.log('Sending request to:', `/api/bot/${botId}/start`);
-        console.log('Request data:', requestData);
 
         fetch(`/api/bot/${botId}/start`, {
             method: 'POST',
@@ -379,10 +362,8 @@ window.startBot = function startBot() {
         })
         .then(response => response.text())
         .then(text => {
-            console.log('Raw start response text:', text);
             try {
                 const data = JSON.parse(text);
-                console.log('Parsed start response:', data);
                 if (data && data.success) {
                     window.location.href = '/running';
                     return;
@@ -468,64 +449,79 @@ function controlBot(action, value) {
 function gatherConfiguration() {
     const config = {};
     const form = document.getElementById('bot-config-form');
+    // Important: FormData grabs the CURRENT value of inputs, which is what we want after programmatic updates
     const formData = new FormData(form);
     
     // Process form data based on parameter types
     {% for param_name, param_info in bot.config_params.items() %}
-    {% if param_info.type == 'RGB' %}
-        config['{{ param_name }}'] = {
-            type: 'RGB',
-            value: [
-                parseInt(formData.get('{{ param_name }}_r')) || 0,
-                parseInt(formData.get('{{ param_name }}_g')) || 0,
-                parseInt(formData.get('{{ param_name }}_b')) || 0
-            ]
-        };
-    {% elif param_info.type == 'Range' %}
-        config['{{ param_name }}'] = {
-            type: 'Range',
-            value: [
-                parseFloat(formData.get('{{ param_name }}_min')) || 0,
-                parseFloat(formData.get('{{ param_name }}_max')) || 0
-            ]
-        };
-    {% elif param_info.type == 'BreakCfg' %}
-        config['{{ param_name }}'] = {
-            type: 'BreakCfg',
-            value: [
-                [
-                    parseFloat(formData.get('{{ param_name }}_break_min')) || 0,
-                    parseFloat(formData.get('{{ param_name }}_break_max')) || 0
-                ],
-                parseFloat(formData.get('{{ param_name }}_break_chance')) || 0
-            ]
-        };
-    {% elif param_info.type == 'Item' %}
-        const itemId_{{ param_name }} = formData.get('{{ param_name }}_id');
-        const itemName_{{ param_name }} = formData.get('{{ param_name }}_name');
-        if (itemId_{{ param_name }}) {
+    try {
+        {% if param_info.type == 'RGB' %}
             config['{{ param_name }}'] = {
-                type: 'Item',
-                value: { id: parseInt(itemId_{{ param_name }}) }
+                type: 'RGB',
+                value: [
+                    parseInt(formData.get('{{ param_name }}_r')) || 0,
+                    parseInt(formData.get('{{ param_name }}_g')) || 0,
+                    parseInt(formData.get('{{ param_name }}_b')) || 0
+                ]
             };
-        } else if (itemName_{{ param_name }}) {
+        {% elif param_info.type == 'Range' %}
             config['{{ param_name }}'] = {
-                type: 'Item',
-                value: { name: itemName_{{ param_name }} }
+                type: 'Range',
+                value: [
+                    parseFloat(formData.get('{{ param_name }}_min')) || 0,
+                    parseFloat(formData.get('{{ param_name }}_max')) || 0
+                ]
             };
-        }
-    {% elif param_info.type == 'Boolean' %}
-        config['{{ param_name }}'] = formData.has('{{ param_name }}');
-    {% elif param_info.type == 'Int' %}
-        const value_{{ param_name }} = formData.get('{{ param_name }}');
-        config['{{ param_name }}'] = parseInt(value_{{ param_name }}) || 0;
-    {% elif param_info.type == 'Float' %}
-        const value_{{ param_name }} = formData.get('{{ param_name }}');
-        config['{{ param_name }}'] = parseFloat(value_{{ param_name }}) || 0;
-    {% elif param_info.type == 'String' %}
-        const value_{{ param_name }} = formData.get('{{ param_name }}');
-        config['{{ param_name }}'] = value_{{ param_name }} || '';
-    {% endif %}
+        {% elif param_info.type == 'BreakCfg' %}
+            const bMin = formData.get('{{ param_name }}_break_min');
+            const bMax = formData.get('{{ param_name }}_break_max');
+            const bChance = formData.get('{{ param_name }}_break_chance');
+            
+            config['{{ param_name }}'] = {
+                type: 'BreakCfg',
+                value: [
+                    [
+                        parseFloat(bMin) || 0,
+                        parseFloat(bMax) || 0
+                    ],
+                    parseFloat(bChance) || 0
+                ]
+            };
+        {% elif param_info.type == 'Item' %}
+            const itemId_{{ param_name }} = formData.get('{{ param_name }}_id');
+            const itemName_{{ param_name }} = formData.get('{{ param_name }}_name');
+            const itemIcon_{{ param_name }} = formData.get('{{ param_name }}_icon');
+            
+            if (itemId_{{ param_name }}) {
+                config['{{ param_name }}'] = {
+                    type: 'Item',
+                    value: { 
+                        id: parseInt(itemId_{{ param_name }}),
+                        name: itemName_{{ param_name }} || '',
+                        icon_b64: itemIcon_{{ param_name }} || ''
+                    }
+                };
+            } else if (itemName_{{ param_name }}) {
+                config['{{ param_name }}'] = {
+                    type: 'Item',
+                    value: { name: itemName_{{ param_name }} }
+                };
+            }
+        {% elif param_info.type == 'Boolean' %}
+            config['{{ param_name }}'] = formData.has('{{ param_name }}');
+        {% elif param_info.type == 'Int' %}
+            const value_{{ param_name }} = formData.get('{{ param_name }}');
+            config['{{ param_name }}'] = parseInt(value_{{ param_name }}) || 0;
+        {% elif param_info.type == 'Float' %}
+            const value_{{ param_name }} = formData.get('{{ param_name }}');
+            config['{{ param_name }}'] = parseFloat(value_{{ param_name }}) || 0;
+        {% elif param_info.type == 'String' %}
+            const value_{{ param_name }} = formData.get('{{ param_name }}');
+            config['{{ param_name }}'] = value_{{ param_name }} || '';
+        {% endif %}
+    } catch (e) {
+        console.error('[Error] gathering field {{ param_name }}:', e);
+    }
     {% endfor %}
     
     return config;
@@ -548,10 +544,10 @@ function updateRGBFromColor(paramName, colorValue) {
     }
 }
 
-function saveConfig() {
+function saveConfig(silent = false) {
     const config = gatherConfiguration();
     
-    fetch(`/api/bot/${botId}/config`, {
+    return fetch(`/api/bot/${botId}/config`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -561,14 +557,18 @@ function saveConfig() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            alert('Configuration saved successfully!');
+            if (!silent) alert('Configuration saved successfully!');
+            return true;
         } else {
+            console.error('Failed to save config:', data);
             alert('Failed to save configuration');
+            return false;
         }
     })
     .catch(error => {
         console.error('Error:', error);
         alert(`Error saving configuration: ${error.message}`);
+        return false;
     });
 }
 
@@ -577,17 +577,21 @@ function loadDefaultConfig() {
         return;
     }
     
-    fetch(`/api/bot/${botId}/config`)
-        .then(response => response.json())
-        .then(config => {
-            // Populate form with default configuration
-            // This is a simplified implementation - you may want to enhance this
+    fetch(`/api/bot/${botId}/reset`, {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
             location.reload();
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert(`Error loading default configuration: ${error.message}`);
-        });
+        } else {
+            alert('Failed to reset configuration: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert(`Error resetting configuration: ${error.message}`);
+    });
 }
 
 function exportConfig() {
@@ -615,13 +619,115 @@ function handleConfigImport(event) {
     reader.onload = function(e) {
         try {
             const config = JSON.parse(e.target.result);
-            // TODO: Populate form with imported configuration
-            alert('Configuration imported successfully! Please refresh the page.');
+            let importedCount = 0;
+
+            // Iterate over config keys
+            for (const [key, value] of Object.entries(config)) {
+                // Determine value type and update DOM
+                
+                // Case 1: Complex Type Wrapped Objects (Item, Color, BreakCfg)
+                if (typeof value === 'object' && value !== null && value.type) {
+                     if (value.type === 'Item' && value.value) {
+                         const idInput = document.querySelector(`input[name="${key}_id"]`);
+                         const nameInput = document.querySelector(`input[name="${key}_name"]`);
+                         const iconInput = document.querySelector(`input[name="${key}_icon"]`);
+                         
+                         const itemId = value.value.id || '';
+                         const itemName = value.value.name || '';
+                         const itemIcon = value.value.icon_b64 || '';
+                         
+                         if (idInput) { 
+                             idInput.setAttribute('value', itemId);
+                             idInput.value = itemId; 
+                             importedCount++; 
+                         }
+
+                         if (nameInput) { 
+                             nameInput.setAttribute('value', itemName);
+                             nameInput.value = itemName; 
+                         }
+                         
+                         if (iconInput && itemIcon) {
+                             iconInput.value = itemIcon;
+                         }
+                         
+                         // Try to trigger visual update if we have a global helper
+                         if (itemId && itemName && window.selectItemForParam) {
+                             window.selectItemForParam(key, itemId, itemName, itemIcon);
+                         }
+                     }
+                     else if (value.type === 'Color' && Array.isArray(value.value)) {
+                         const [r, g, b, t] = value.value;
+                         const rInput = document.querySelector(`input[name="${key}_r"]`);
+                         const gInput = document.querySelector(`input[name="${key}_g"]`);
+                         const bInput = document.querySelector(`input[name="${key}_b"]`);
+                         const tInput = document.querySelector(`input[name="${key}_tolerance"]`);
+                         
+                         if (rInput) { rInput.value = r; importedCount++; }
+                         if (gInput) gInput.value = g;
+                         if (bInput) bInput.value = b;
+                         if (tInput) tInput.value = t;
+                         
+                         // Update color picker
+                         const picker = document.querySelector(`input[name="${key}_color"]`);
+                         if (picker) {
+                             // RGB to Hex
+                             const hex = "#" + ((1 << 24) + (parseInt(r)<<16) + (parseInt(g)<<8) + parseInt(b)).toString(16).slice(1);
+                             picker.value = hex;
+                         }
+                     }
+                     else if (value.type === 'BreakCfg' && Array.isArray(value.value)) {
+                         // Structure is [[min, max], chance]
+                         const min = value.value[0]?.[0];
+                         const max = value.value[0]?.[1];
+                         const chance = value.value[1];
+                         
+                         const minInput = document.querySelector(`input[name="${key}_break_min"]`);
+                         const maxInput = document.querySelector(`input[name="${key}_break_max"]`);
+                         const chanceInput = document.querySelector(`input[name="${key}_break_chance"]`);
+                         
+                         if (minInput && min !== undefined) { minInput.value = min; importedCount++; }
+                         if (maxInput && max !== undefined) maxInput.value = max;
+                         if (chanceInput && chance !== undefined) chanceInput.value = chance;
+                     }
+                } 
+                // Case 2: Simple values (String, Int, Float, Boolean)
+                else {
+                    const input = document.querySelector(`input[name="${key}"]`);
+                    if (input) {
+                        if (input.type === 'checkbox') {
+                            input.checked = (value === true);
+                        } else {
+                            input.value = value;
+                        }
+                        importedCount++;
+                    }
+                }
+            }
+
+            if (importedCount > 0) {
+                // Auto-save to persist changes to server
+                saveConfig(true).then((success) => {
+                    if (success) {
+                        alert(`Configuration imported successfully (${importedCount} parameters updated). Settings have been saved.`);
+                        // We reload to ensure server state is consistent and UI is fresh
+                        window.location.reload();
+                    } else {
+                        alert("Configuration imported to form, but failed to save to server.");
+                    }
+                });
+            } else {
+                alert('No matching configuration parameters found in the file.');
+            }
+            
         } catch (error) {
+            console.error(error);
             alert('Error parsing configuration file: ' + error.message);
         }
     };
     reader.readAsText(file);
+    // Reset file input so you can load the same file again if needed
+    event.target.value = ''; 
 }
 
 // Global function to display search results in the modal
@@ -702,16 +808,15 @@ window.displayItemPickerResults = function(items, paramName, modal) {
 
 // Global function to select an item and update the form
 window.selectItemForParam = function(paramName, itemId, itemName, iconB64) {
-    console.log('[Debug] selectItemForParam called', { paramName, itemId, itemName });
-
     // Update the form fields
     const nameSelector = `input[name="${paramName}_name"]`;
     const idSelector = `input[name="${paramName}_id"]`;
+    const iconSelector = `input[name="${paramName}_icon"]`;
+    
     const nameInput = document.querySelector(nameSelector);
     const idInput = document.querySelector(idSelector);
+    const iconInput = document.querySelector(iconSelector);
     
-    console.log('[Debug] Looking for inputs:', { nameSelector, idSelector, foundName: !!nameInput, foundId: !!idInput });
-
     if (nameInput) {
         nameInput.value = itemName;
         // Flash effect
@@ -741,7 +846,7 @@ window.selectItemForParam = function(paramName, itemId, itemName, iconB64) {
                 // Update content
                 displayDiv.innerHTML = `
                     <div class="d-flex align-items-center">
-                        <img src="data:image/png;base64,${iconB64}" 
+                        <img src="data:image/png;base64,${iconB64 || ''}" 
                              class="item-param-icon me-2" 
                              alt="${itemName} icon"
                              style="width: 32px; height: 32px; object-fit: contain;">
@@ -775,6 +880,13 @@ window.selectItemForParam = function(paramName, itemId, itemName, iconB64) {
         idInput.value = itemId;
     } else {
         console.error('[Error] Could not find ID input for param:', paramName);
+    }
+
+    if (iconInput) {
+        iconInput.value = iconB64 || '';
+    } else {
+        // Warning only, as it might be missing in older templates?
+        console.warn('[Warning] Could not find Icon input for param (may be missing hidden field):', paramName);
     }
     
     // Close modal
@@ -934,18 +1046,6 @@ window.openItemPicker = window.openItemPicker || function(paramName, initialQuer
         setTimeout(performItemSearch, 100);
     }
 };
-
-// (Duplicate displayItemPickerResults removed)
-
-// (Duplicate selectItemForParam removed)
-
-// Debug: Log that functions are loaded
-console.log('Item picker functions loaded:', {
-    searchItem: typeof window.searchItem,
-    openItemPicker: typeof window.openItemPicker,
-    displayItemPickerResults: typeof window.displayItemPickerResults,
-    selectItemForParam: typeof window.selectItemForParam
-});
 </script>
 
 <style>
@@ -1010,13 +1110,6 @@ console.log('Item picker functions loaded:', {
     box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.3);
 }
 </style>
-
-<!-- Final function override to ensure they work -->
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // (Duplicate logic removed)
-});
-</script>
 
 {% endblock %}
 
