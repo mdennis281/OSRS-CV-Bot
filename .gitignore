@@ -166,3 +166,7 @@ osrsbox-db-master
 # tesseract training data
 data/fonts/tesseract
 ocr_train
+
+
+# configs
+data/configs/*.json

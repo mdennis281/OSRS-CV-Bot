@@ -115,6 +115,12 @@ class ScriptControl(metaclass=SingletonMeta):
     @property
     def pause(self):
         return self._pause
+    
+    def reset(self):
+        """Reset control flags to default states."""
+        self._terminate = False
+        self._pause = False
+        self.break_until = 0
 
     @pause.setter
     def pause(self, value: bool):

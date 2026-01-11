@@ -18,6 +18,7 @@ import time
 import threading
 import importlib.util
 import inspect
+import textwrap
 from pathlib import Path
 from typing import Dict, List, Optional, Type, Any
 import subprocess
@@ -25,6 +26,7 @@ import requests
 import asyncio
 import websockets
 from datetime import datetime
+from dataclasses import dataclass, field, asdict
 
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
@@ -38,24 +40,48 @@ from core.item_db import ItemLookup
 from bots.core.config import BotConfigMixin
 from bots.core.cfg_types import TYPES as CFG_TYPES
 from core.logger import get_logger
-
+from core.control import ScriptControl
 app = Flask(__name__)
 app.secret_key = 'osrs-bot-ui-secret-key-change-in-production'
 CORS(app)
 
+log = get_logger("BotUI")
+
+@dataclass
+class BotMetadata:
+    id: str
+    name: str
+    description: str
+    instructions: str
+    file_path: str
+    module_name: str
+    config_class: Type[BotConfigMixin]
+    executor_class: Type[Any]
+    config_params: Dict[str, Any]
+    default_config: Dict[str, Any]
+
+@dataclass
+class BotInstance:
+    bot_id: str
+    executor: Any
+    thread: threading.Thread
+    config: Dict[str, Any]
+    username: str
+    start_time: float
+    api_port: int
+    status: str
+
 # Global bot registry and running bot processes
-bot_registry: Dict[str, Dict[str, Any]] = {}
-current_bot: Optional[Dict[str, Any]] = None
+bot_registry: Dict[str, BotMetadata] = {}
+current_bot: Optional[BotInstance] = None
 monitoring_thread: Optional[threading.Thread] = None
 monitoring_active = False
-
-log = get_logger("BotUI")
 
 class BotDiscovery:
     """Discovers and registers available bots from the bots directory"""
     
     @staticmethod
-    def discover_bots() -> Dict[str, Dict[str, Any]]:
+    def discover_bots() -> Dict[str, BotMetadata]:
         """Scan bots directory and return information about available bots"""
         bots_dir = project_root / "bots"
         discovered_bots = {}
@@ -72,14 +98,14 @@ class BotDiscovery:
             try:
                 bot_info = BotDiscovery._analyze_bot_file(bot_file)
                 if bot_info:
-                    discovered_bots[bot_info['id']] = bot_info
+                    discovered_bots[bot_info.id] = bot_info
             except Exception as e:
                 log.warning(f"Failed to analyze bot file {bot_file}: {e}")
         
         return discovered_bots
     
     @staticmethod
-    def _analyze_bot_file(bot_file: Path) -> Optional[Dict[str, Any]]:
+    def _analyze_bot_file(bot_file: Path) -> Optional[BotMetadata]:
         """Analyze a single bot file to extract configuration and metadata"""
         try:
             spec = importlib.util.spec_from_file_location(bot_file.stem, bot_file)
@@ -109,18 +135,20 @@ class BotDiscovery:
             # Get bot metadata
             bot_name = getattr(bot_executor_class, 'name', bot_file.stem.replace('_', ' ').title())
             bot_description = getattr(bot_executor_class, 'description', f'A bot from {bot_file.name}')
+            bot_instructions = textwrap.dedent(getattr(bot_executor_class, 'instructions', "")).strip()
             
-            return {
-                'id': bot_file.stem,
-                'name': bot_name,
-                'description': bot_description,
-                'file_path': str(bot_file),
-                'module_name': f'bots.{bot_file.stem}',
-                'config_class': bot_config_class,
-                'executor_class': bot_executor_class,
-                'config_params': config_params,
-                'default_config': BotDiscovery._get_default_config(bot_config_class)
-            }
+            return BotMetadata(
+                id=bot_file.stem,
+                name=bot_name,
+                description=bot_description,
+                instructions=bot_instructions,
+                file_path=str(bot_file),
+                module_name=f'bots.{bot_file.stem}',
+                config_class=bot_config_class,
+                executor_class=bot_executor_class,
+                config_params=config_params,
+                default_config=BotDiscovery._get_default_config(bot_config_class)
+            )
             
         except Exception as e:
             log.error(f"Error analyzing bot file {bot_file}: {e}")
@@ -277,9 +305,9 @@ def bot_monitoring_thread():
     while monitoring_active:
         try:
             if current_bot:
-                bot_info = current_bot
-                thread = bot_info['thread']
-                bot_id = bot_info['bot_id']
+                bot_instance = current_bot
+                thread = bot_instance.thread
+                bot_id = bot_instance.bot_id
                 
                 # Check if the bot thread has terminated
                 if not thread.is_alive():
@@ -331,21 +359,21 @@ class BotManager:
         try:
             # Stop any currently running bot first
             if current_bot:
-                log.info(f"Stopping currently running bot: {current_bot['bot_id']}")
-                BotManager.stop_bot(current_bot['bot_id'])
+                log.info(f"Stopping currently running bot: {current_bot.bot_id}")
+                BotManager.stop_bot(current_bot.bot_id)
                 
-            if current_bot and current_bot['bot_id'] == bot_id:
+            if current_bot and current_bot.bot_id == bot_id:
                 log.warning(f"Bot {bot_id} is already running")
                 return False
             
-            bot_info = bot_registry.get(bot_id)
-            if not bot_info:
+            bot_metadata = bot_registry.get(bot_id)
+            if not bot_metadata:
                 log.error(f"Bot {bot_id} not found in registry")
                 return False
             
             # Import and configure the bot directly
-            config_class = bot_info['config_class']
-            executor_class = bot_info['executor_class']
+            config_class = bot_metadata.config_class
+            executor_class = bot_metadata.executor_class
             
             # Create config instance and apply custom configuration
             bot_config = config_class()
@@ -355,26 +383,22 @@ class BotManager:
             bot_executor = executor_class(bot_config, user=username)
             
             # Reset control flags before starting the bot
-            if hasattr(bot_executor, 'control'):
-                bot_executor.control.terminate = False
-                bot_executor.control.pause = False
-                log.info("Reset control flags: terminate=False, pause=False")
+            ScriptControl().reset()
             
             # Start the bot in a separate thread
-            import threading
             bot_thread = threading.Thread(target=bot_executor.start, daemon=True)
             bot_thread.start()
             
-            current_bot = {
-                'bot_id': bot_id,
-                'executor': bot_executor,
-                'thread': bot_thread,
-                'config': config,
-                'username': username,
-                'start_time': time.time(),
-                'api_port': 5432,  # Default BotAPI port
-                'status': 'running'
-            }
+            current_bot = BotInstance(
+                bot_id=bot_id,
+                executor=bot_executor,
+                thread=bot_thread,
+                config=config,
+                username=username,
+                start_time=time.time(),
+                api_port=5432,
+                status='running'
+            )
             
             # Start monitoring for bot termination
             start_monitoring()
@@ -384,7 +408,7 @@ class BotManager:
             
         except Exception as e:
             log.error(f"Failed to start bot {bot_id}: {e}")
-            if current_bot and current_bot['bot_id'] == bot_id:
+            if current_bot and current_bot.bot_id == bot_id:
                 current_bot = None
             return False
     
@@ -393,12 +417,12 @@ class BotManager:
         """Stop a running bot"""
         global current_bot
         
-        if not current_bot or current_bot['bot_id'] != bot_id:
+        if not current_bot or current_bot.bot_id != bot_id:
             return False
         
         try:
-            bot_info = current_bot
-            executor = bot_info['executor']
+            bot_instance = current_bot
+            executor = bot_instance.executor
             
             # Stop the bot executor gracefully
             if hasattr(executor, 'stop'):
@@ -418,12 +442,12 @@ class BotManager:
     @staticmethod
     def get_bot_status(bot_id: str) -> Dict[str, Any]:
         """Get status of a running bot"""
-        if not current_bot or current_bot['bot_id'] != bot_id:
+        if not current_bot or current_bot.bot_id != bot_id:
             return {'status': 'not_running'}
         
-        bot_info = current_bot
-        thread = bot_info['thread']
-        executor = bot_info['executor']
+        bot_instance = current_bot
+        thread = bot_instance.thread
+        executor = bot_instance.executor
         
         # Check if thread is still alive
         if not thread.is_alive():
@@ -444,15 +468,15 @@ class BotManager:
                     return {
                         'status': 'paused',
                         'paused': True,
-                        'runtime': time.time() - bot_info.get('start_time', time.time()),
-                        'start_time': bot_info.get('start_time', 0)
+                        'runtime': time.time() - bot_instance.start_time,
+                        'start_time': bot_instance.start_time
                     }
                 else:
                     return {
                         'status': 'running',
                         'paused': False,
-                        'runtime': time.time() - bot_info.get('start_time', time.time()),
-                        'start_time': bot_info.get('start_time', 0)
+                        'runtime': time.time() - bot_instance.start_time,
+                        'start_time': bot_instance.start_time
                     }
         except Exception as e:
             log.error(f"Error getting bot status for {bot_id}: {e}")
@@ -461,18 +485,18 @@ class BotManager:
         # Fallback status
         return {
             'status': 'running',
-            'runtime': time.time() - bot_info.get('start_time', time.time()),
-            'start_time': bot_info.get('start_time', 0)
+            'runtime': time.time() - bot_instance.start_time,
+            'start_time': bot_instance.start_time
         }
     
     @staticmethod
     def control_bot(bot_id: str, action: str, value: Any = None) -> bool:
         """Send control commands to a running bot"""
-        if not current_bot or current_bot['bot_id'] != bot_id:
+        if not current_bot or current_bot.bot_id != bot_id:
             return False
         
         try:
-            executor = current_bot['executor']
+            executor = current_bot.executor
             
             if hasattr(executor, 'control'):
                 control = executor.control
@@ -527,7 +551,7 @@ def bot_detail(bot_id: str):
                          bot=bot_info,
                          bots=bot_registry,  # Include bots for sidebar
                          status=running_status,
-                         is_running=current_bot and current_bot['bot_id'] == bot_id)
+                         is_running=current_bot and current_bot.bot_id == bot_id)
 
 @app.route('/running')
 def running_bot():
@@ -548,13 +572,13 @@ def api_bots():
     serializable_registry = {}
     for bot_id, bot_info in bot_registry.items():
         serializable_registry[bot_id] = {
-            'id': bot_info['id'],
-            'name': bot_info['name'], 
-            'description': bot_info['description'],
-            'file_path': bot_info['file_path'],
-            'module_name': bot_info['module_name'],
-            'config_params': bot_info['config_params'],
-            'default_config': bot_info['default_config']
+            'id': bot_info.id,
+            'name': bot_info.name, 
+            'description': bot_info.description,
+            'file_path': bot_info.file_path,
+            'module_name': bot_info.module_name,
+            'config_params': bot_info.config_params,
+            'default_config': bot_info.default_config
             # Exclude 'config_class' and 'executor_class' as they're not JSON serializable
         }
     return jsonify(serializable_registry)
@@ -599,7 +623,7 @@ def api_get_bot_config(bot_id: str):
     
     # Return the current configuration parameters, not default_config
     # config_params holds the current state including loaded values
-    return jsonify(bot_info.get('config_params', {}))
+    return jsonify(bot_info.config_params)
 
 CONFIG_DIR = project_root / "data" / "configs"
 
@@ -642,7 +666,7 @@ def api_save_bot_config(bot_id: str):
         return jsonify({'error': 'No configuration provided'}), 400
     
     # Validate against known params
-    current_params = bot_info.get('config_params', {})
+    current_params = bot_info.config_params
     
     # Update in-memory registry
     for key, value in config_data.items():
@@ -678,7 +702,7 @@ def api_reset_bot_config(bot_id: str):
     
     try:
         # Get the config class
-        config_class = bot_info.get('config_class')
+        config_class = bot_info.config_class
         if not config_class:
             return jsonify({'error': 'Config class not found'}), 500
             
@@ -686,7 +710,7 @@ def api_reset_bot_config(bot_id: str):
         default_params = BotDiscovery._extract_config_params(config_class)
         
         # Update registry
-        bot_info['config_params'] = default_params
+        bot_info.config_params = default_params
         
         # Save to disk to persist the reset
         if _save_bot_config_to_disk(bot_id, default_params):
@@ -849,8 +873,8 @@ def get_current_bot_status():
     if not current_bot:
         return None
     return {
-        'bot_id': current_bot['bot_id'],
-        'status': BotManager.get_bot_status(current_bot['bot_id'])
+        'bot_id': current_bot.bot_id,
+        'status': BotManager.get_bot_status(current_bot.bot_id)
     }
 
 @app.context_processor
@@ -875,7 +899,7 @@ def initialize_app():
         saved_config = _load_bot_config_from_disk(bot_id)
         if saved_config:
             # Merge saved config into current params
-            current_params = bot_info.get('config_params', {})
+            current_params = bot_info.config_params
             for key, value in saved_config.items():
                 if key in current_params:
                     # Self-healing: Re-hydrate Item parameters to ensure icons/names are present
@@ -921,7 +945,7 @@ def cleanup_on_exit():
     """Clean up running bot when the application exits"""
     log.info("Cleaning up running bot...")
     if current_bot:
-        BotManager.stop_bot(current_bot['bot_id'])
+        BotManager.stop_bot(current_bot.bot_id)
 
 @app.after_request
 def add_cache_headers(response):

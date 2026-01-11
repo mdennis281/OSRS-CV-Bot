@@ -10,7 +10,7 @@ from core import cv_debug
 
 class Bot:
     def __init__(self, user='', break_cfg: BreakCfgParam = None):
-        self.log = get_logger("Bot")
+        self.log = get_logger(getattr(self, 'name', 'Bot'))
         self.client = RuneLiteClient(user)
         self.itemdb = ItemLookup()
         self.bank = BankInterface(self.client, self.itemdb)

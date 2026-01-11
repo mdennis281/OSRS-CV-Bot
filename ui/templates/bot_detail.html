@@ -21,6 +21,28 @@
     </div>
 </div>
 
+{% if bot.instructions %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card border-info">
+            <div class="card-header bg-info text-dark d-flex justify-content-between align-items-center" 
+                 data-bs-toggle="collapse" data-bs-target="#instructionsCollapse" style="cursor: pointer;">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-book-open"></i> Bot Instructions & Setup
+                </h5>
+                <i class="fas fa-chevron-down"></i>
+            </div>
+            <div id="instructionsCollapse" class="collapse show">
+                <div class="card-body bg-light">
+                    <!-- preserving whitespace but wrapping text -->
+                    <pre style="white-space: pre-wrap; font-family: var(--bs-body-font-family); margin-bottom: 0;">{{ bot.instructions }}</pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <div class="row">
     <!-- Configuration Section -->
     <div class="col-lg-8">
