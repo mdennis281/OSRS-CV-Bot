@@ -25,11 +25,14 @@ class BotConfig(BotConfigMixin):
     )
 
 
-    
 
 class BotExecutor(Bot):
     name: str = "High Alch Bot"
     description: str = "A bot that performs high alchemy on a chosen item."
+    instructions: str = """
+    This bot will cast high alchemy on a specified item in the inventory.
+    Ensure item selected is noted, it's designed to click a single slot.
+    Expects nature runes in inventory, and fire staff of some kind equipped."""
     
     
     def __init__(self, config: BotConfig, user=''):
@@ -43,7 +46,7 @@ class BotExecutor(Bot):
     def start(self):
         nattys, items = self.init()
         self.alch_count = min(nattys, items)
-        print(f'Found {nattys} nature runes and {items} items to alch. Alching {self.alch_count} times.')
+        self.log.info(f'Found {nattys} nature runes and {items} items to alch. Alching {self.alch_count} times.')
         
         self.find_overlap(self.cfg.alch_item.id)
         self.get_overlap_point()
@@ -67,7 +70,7 @@ class BotExecutor(Bot):
 
             alched = self.alch_count - (i + 1)
             if not alched % 10:
-                print(f'Remaining items: {alched}')
+                self.log.info(f'Remaining items: {alched}')
 
     def init(self):
         natty_count = self.client.get_item_cnt(self.cfg.nature_rune.name, min_confidence=.9)
@@ -100,7 +103,7 @@ class BotExecutor(Bot):
             sub_match=self.client.sectors.toolplane,
             min_scale=.5
         )
-        print(f'Found alch match: {alch_match}')
+        self.log.info(f'Found alch match: {alch_match}')
 
         self.overlap = alch_match.find_overlap(item_match)
 

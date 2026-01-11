@@ -44,8 +44,14 @@ class BotConfig(BotConfigMixin):
 
 class BotExecutor(Bot):
     name: str = "Tile Wealth Thiever"
-    description: str = "Wealthy citizen thiever for tile masters."
-
+    description: str = "Wealthy citizen thiever for grid masters."
+    instructions: str = """
+    This was a bot designed for grid master minigame.
+    It's pretty trash, you should probably not use it.
+    
+    It needs some wealthy citizen plugin to work at all. (to highlight the active thievable citizen tile)
+    """
+    
     def __init__(self, config: BotConfig, user: str = ""):
         super().__init__(user, break_cfg=config.break_cfg)
         self.cfg: BotConfig = config

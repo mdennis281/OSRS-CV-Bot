@@ -69,6 +69,20 @@ class BotConfig(BotConfigMixin):
 class BotExecutor(Bot):
     name: str = "NMZ Bot"
     description: str = "A bot that manages NMZ prayer flicking, health, and absorption/overload potions"
+    instructions: str = """
+    Start nmz with whatever method/kit (rumble works best)
+    bring rock cake and absorption (+ overload) pots
+    IF BRINGING OVERLOADS, DO NOT DRINK THEM YOURSELF BEFOREHAND
+    You can drink absorption pots beforehand
+    Turn on auto retaliate.
+    Set quick prayer to the red heart (2x regen rate)
+    
+    I like going into the corner, making the camera face the wall since sometimes the minimap clicker
+    can misclick and make you walk.
+    
+    Start the bot. It should keep you alive.
+    Gotten all combat skills to 99 on multiple accounts with this bot.
+    """
     
     def __init__(self, config: BotConfig, user=''):
         super().__init__(user, break_cfg=config.break_cfg)
