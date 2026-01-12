@@ -1,6 +1,8 @@
 # Old-school RuneScape Computer Vision Bot
 A vibe coding experiment that has grown into a pretty impressive botting framework.
 
+I wouldn't recommend using this if you aren't willing to get your hands dirty writing some python.
+
  > Offically support for **Windows** only, sorry
 
 
@@ -14,9 +16,10 @@ https://github.com/user-attachments/assets/8d7b6eb6-8b16-466c-b32c-9fde9a23fa37
 
 https://github.com/user-attachments/assets/226daf47-361a-433d-89e3-dad1afb1c87a
 
-### Websocket controller
-![Control UI](https://github.com/user-attachments/assets/380ee7a5-6360-4994-a758-f2374041b562)
-![Log UI](https://github.com/user-attachments/assets/a3856f32-1587-4916-b95e-d03f7991546c)
+### New UI (still a little buggy)
+![Control UI](https://private-user-images.githubusercontent.com/16827865/534314440-f62f9af1-29c6-4eb1-bd5b-223546f0e120.png)
+![Bots UI](https://private-user-images.githubusercontent.com/16827865/534314598-01452975-af8b-4afc-8d4e-49452bb9ff54.png)
+![Config UI](https://private-user-images.githubusercontent.com/16827865/534314697-991f52c1-dbc1-442d-8e56-b370007e7bce.png)
 
 
 ### Computer Vision Debugger
@@ -24,11 +27,28 @@ https://github.com/user-attachments/assets/226daf47-361a-433d-89e3-dad1afb1c87a
 
 ![CV Debug](https://github.com/user-attachments/assets/c22cecd6-4a13-41e0-af44-196d6348a6df)
 
- ## Why arent the docs better?
+ ## Install
+Full UI experience
+```bash
+python -m pip install -r requirements.txt
+python main.py
+```
 
-I open sourced this for portfolio building, not script kiddies.
+Direct bot invocation (need this for bots with complex params ie. list of items):
+Create new file
+```python
+# update bot script here
+from bots.master_mixer import BotConfig, BotExecutor
 
-A competent dev should be able to get this working in a jiffy if theyre that interested.
+
+def main():
+    config = BotConfig()
+    bot = BotExecutor(config)
+    
+    bot.start()
+    
+main()
+```
 
 NOTE: the bot script architecture is migrating from legacy (scripts defined in base dir) to the new bot architecture defined in [./bots](bots/). Invocation of the new architecture can be seen in [main.py](./main.py).
 

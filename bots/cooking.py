@@ -1,7 +1,6 @@
 from bots.core import BotConfigMixin
 from bots.core.cfg_types import RangeParam, BreakCfgParam, ItemParam, RGBParam
 from core.bot import Bot
-from core.osrs_client import ToolplaneTab
 import random
 import time
 import keyboard
