@@ -47,6 +47,11 @@ class BotExecutor(Bot):
     description: str = (
         "Takes focus every X minutes and moves the camera randomly for a short time."
     )
+    instructions: str = """
+    This bot helps keep your RuneLite client active by periodically bringing it into focus.
+    I havent messed with this one much. It does keep you logged in, but it's kinda sketchy.
+    """
+    tier: str = "C"
 
     def __init__(self, config: BotConfig, user: str = ""):
         super().__init__(user, break_cfg=config.break_cfg)

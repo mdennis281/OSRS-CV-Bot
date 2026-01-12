@@ -29,6 +29,7 @@ class BotConfig(BotConfigMixin):
 class BotExecutor(Bot):
     name: str = "High Alch Bot"
     description: str = "A bot that performs high alchemy on a chosen item."
+    tier: str = "S"
     instructions: str = """
     This bot will cast high alchemy on a specified item in the inventory.
     Ensure item selected is noted, it's designed to click a single slot.

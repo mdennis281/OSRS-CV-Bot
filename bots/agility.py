@@ -46,7 +46,30 @@ class BotConfig(BotConfigMixin):
 
 class BotExecutor(Bot):
     name: str = "Rooftop Agility"
+    tier: str = "A"
     description: str = "Traverses rooftop agility courses, clicking next obstacles and looting marks of grace."
+    instructions: str = """
+    Needs plugin: Rooftop Agility Improved
+    
+    Ensure the following settings have no transparency in the colors:
+    - Obstacles:
+        - Next obstacle tile (green)
+        - Stop tile (red)
+    - Mark of graces:
+        - Mark of grace tile (pink/magenta)
+        - Show stop obstacles (checked)
+        
+    Obviously the colors are configurable.
+    
+    Ensure camera is oriented in a way so all "next" obstacles are visible on screen.
+    
+    Thousands of laps completed in:
+    - Canafis
+    - Pollnivneach
+    - Seers' village
+    
+    Some rooftops are a bit buggy because of issues with the plugin.
+    """
     
     def __init__(self, config: BotConfig, user: str = ""):
         super().__init__(user, break_cfg=config.break_cfg)

@@ -24,6 +24,7 @@ class BotConfig(BotConfigMixin):
 
 class BotExecutor(Bot):
     name: str = "Mahogany Table Builder"
+    tier: str = "B"
     description: str = "Builds and removes mahogany tables in POH for Construction XP."
     instructions: str = """
     Several people have verifiably gotten 99 construction with this bot. Going pretty heavy, no bans.

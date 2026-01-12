@@ -69,6 +69,7 @@ class BotConfig(BotConfigMixin):
 class BotExecutor(Bot):
     name: str = "NMZ Bot"
     description: str = "A bot that manages NMZ prayer flicking, health, and absorption/overload potions"
+    tier: str = "S"
     instructions: str = """
     Start nmz with whatever method/kit (rumble works best)
     bring rock cake and absorption (+ overload) pots

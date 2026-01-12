@@ -72,7 +72,13 @@ class BotConfig(BotConfigMixin):
 class BotExecutor(Bot):
     name: str = "Motherload Miner Bot"
     description: str = "A bot that mines in the Motherload Mine, deposits ore, collects processed ore, and banks it"
+    tier: str = "C"
+    instructions: str = """
+    This bot is designed to work after the 2nd floor is unlocked, alongside the upstairs hopper.
+    It will mine pay-dirt, deposit it in the hopper, collect processed ore from the sack downstairs, and bank it.
     
+    It needs to be babysat, has trouble determining if it's upstairs or downstairs sometimes.
+    """
     
     def __init__(self, config: BotConfig, user=''):
         super().__init__(user, break_cfg=config.break_cfg)

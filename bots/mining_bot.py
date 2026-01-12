@@ -58,6 +58,14 @@ class BotConfig(BotConfigMixin):
 class BotExecutor(Bot):
     name: str = "Mining Bot"
     description: str = "A bot that mines ores and banks them"
+    tier: str = "B"
+    instructions: str = """
+        Mines and banks specified ores, while dropping any gems found.
+        Pretty configurable, though im not sure this will work with the UI wrapper since the config types
+        are lists of items/waypoints.
+        
+        You may have to manually invoke this outside the UI wrapper for now.
+    """
     
     
     def __init__(self, config: BotConfig, user=''):

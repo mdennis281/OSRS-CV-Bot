@@ -45,6 +45,7 @@ class BotConfig(BotConfigMixin):
 class BotExecutor(Bot):
     name: str = "Tile Wealth Thiever"
     description: str = "Wealthy citizen thiever for grid masters."
+    tier: str = "F"
     instructions: str = """
     This was a bot designed for grid master minigame.
     It's pretty trash, you should probably not use it.

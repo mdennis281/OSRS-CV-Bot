@@ -32,6 +32,16 @@ class BotConfig(BotConfigMixin):
 class BotExecutor(Bot):
     name: str = "Item Combiner"
     description: str = "Combines two items (e.g., Battlestaff + Water orb)."
+    tier: str = "B"
+    instructions: str = """
+    This bot combines two specified items from the bank into a resulting item by clicking them in the inventory.
+    It needs the bank tile set and the bank pin entered.
+    
+    Theres issues with the architecture of this bot, making it a bit dumb (AI generated)
+    
+    Sometimes it starts walking away from the bank at the very beginning - not sure why.
+    Restarting typically fixes the problem.
+    """
     
     def __init__(self, config: BotConfig, user: str = ""):
         super().__init__(user, break_cfg=config.break_cfg)

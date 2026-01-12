@@ -36,7 +36,13 @@ class BotConfig(BotConfigMixin):
 class BotExecutor(Bot):
     name: str = "Dart Fletcher Bot"
     description: str = "A bot that fletches darts by clicking dart tips and feathers, then pressing spacebar."
+    tier: str = "S"
+    instructions: str = """
+    This bot fletches darts by clicking on dart tips and feathers in the inventory, then pressing spacebar to start crafting.
     
+    Pretty basic, but it definitely gets the job done.
+    """
+
     def __init__(self, config: BotConfig, user=''):
         super().__init__(user, break_cfg=config.break_cfg)
         self.cfg: BotConfig = config

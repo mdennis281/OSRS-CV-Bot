@@ -40,6 +40,26 @@ class BotConfig(BotConfigMixin):
 class BotExecutor(Bot):
     name: str = "Mastering Mixology Bot"
     description: str = "A bot that plays Mastering Mixology"
+    tier: str = "B"
+    instructions: str = """
+    Needs plugin: mastering mixology
+    
+    Plugin config:
+      - needs station, quick action, and digweed colors set
+      - all the checkboxes are selected on my config
+      - Border width: ~5px
+      
+    Setup:
+        - Keep ingredients in inventory, it has logic to refill them when they run low.
+        - zoom out camera to see digweeds
+        - Select the excluded potions: ['lll','aaa', 'etc']
+    There's a bug where the wrong potion gets made & eventually it fills up your inventory with pots.
+    
+    I have made a lot of money with this plugin, but it's also the only one I've ever been banned on.
+    Use at your own risk.
+    
+    """
+    
     
     
     def __init__(self, config: BotConfig, user=''):

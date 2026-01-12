@@ -68,6 +68,7 @@ class BotConfig(BotConfigMixin):
 class BotExecutor(Bot):
     name: str = "Woodcutter Bot"
     description: str = "A bot that chops trees and banks or drops logs when inventory is full"
+    tier: str = "B"
     instructions: str = """
     This bot will chop trees of the specified type and either drop or bank the logs when the inventory is full.
     Banking function will drop reliability since the movement orchestrator is not perfect.

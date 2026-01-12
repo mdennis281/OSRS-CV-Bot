@@ -50,6 +50,14 @@ class BotConfig(BotConfigMixin):
 class BotExecutor(Bot):
     name: str = "Mixer Herb Refiner"
     description: str = "A bot that withdraws herbs from the bank, cleans them if grimy, and refines them."
+    tier: str = "A"
+    instructions: str = """
+    This bot automates the process of withdrawing herbs from the bank, cleaning them if they are grimy,
+    and refining them using the Mixer Herb Refiner.
+    Expected to be used alongside the Mastering Mixology bot, or manually idc.
+    It needs tiles set on the bank chest and the refiner.
+    Bank pin must already be entered.
+    """
     
     def __init__(self, config: BotConfig, user=''):
         super().__init__(user, break_cfg=config.break_cfg)
