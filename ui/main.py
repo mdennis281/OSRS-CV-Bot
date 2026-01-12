@@ -53,6 +53,7 @@ class BotMetadata:
     name: str
     description: str
     instructions: str
+    tier: str
     file_path: str
     module_name: str
     config_class: Type[BotConfigMixin]
@@ -136,12 +137,14 @@ class BotDiscovery:
             bot_name = getattr(bot_executor_class, 'name', bot_file.stem.replace('_', ' ').title())
             bot_description = getattr(bot_executor_class, 'description', f'A bot from {bot_file.name}')
             bot_instructions = textwrap.dedent(getattr(bot_executor_class, 'instructions', "")).strip()
+            bot_tier = getattr(bot_executor_class, 'tier', '?')
             
             return BotMetadata(
                 id=bot_file.stem,
                 name=bot_name,
                 description=bot_description,
                 instructions=bot_instructions,
+                tier=bot_tier,
                 file_path=str(bot_file),
                 module_name=f'bots.{bot_file.stem}',
                 config_class=bot_config_class,

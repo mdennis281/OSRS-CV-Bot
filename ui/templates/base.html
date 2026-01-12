@@ -16,6 +16,45 @@
     <!-- Non-critical CSS - loaded asynchronously -->
     <link rel="preload" href="{{ url_for('static', filename='css/icons.css') }}" as="style" onload="this.onload=null;this.rel='stylesheet'">
     <noscript><link href="{{ url_for('static', filename='css/icons.css') }}" rel="stylesheet"></noscript>
+    
+    <style>
+        .tier-badge {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            line-height: 24px;
+            text-align: center;
+            border-radius: 4px;
+            font-weight: bold;
+            font-family: monospace;
+            font-size: 14px;
+            margin-left: 8px;
+            vertical-align: middle;
+            border: 1px solid rgba(0,0,0,0.1);
+        }
+        @keyframes sparkle {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        .tier-S { 
+            background: linear-gradient(120deg, #ffc107, #fffdc9, #ffc107, #ff9800);
+            background-size: 300% 300%;
+            color: #614101; 
+            box-shadow: 0 0 12px rgba(255, 193, 7, 0.6); 
+            border-color: #ffc107;
+            animation: sparkle 2s ease infinite;
+            text-shadow: 0px 1px 0px rgba(255,255,255,0.5);
+            position: relative;
+            overflow: hidden;
+        }
+        .tier-A { background-color: #198754; color: #fff; border-color: #157347; }
+        .tier-B { background-color: #0dcaf0; color: #000; border-color: #0aa2c0; }
+        .tier-C { background-color: #6c757d; color: #fff; border-color: #565e64; }
+        .tier-D { background-color: #fd7e14; color: #fff; border-color: #ec6502; }
+        .tier-F { background-color: #dc3545; color: #fff; border-color: #bb2d3b; }
+        .tier-unknown { background-color: #f8f9fa; color: #6c757d; border-color: #dee2e6; font-weight: normal; }
+    </style>
 </head>
 <body>
     <div class="d-flex" id="wrapper">

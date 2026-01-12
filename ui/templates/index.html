@@ -116,7 +116,12 @@
                         <div class="col-md-4 mb-3">
                             <div class="card h-100">
                                 <div class="card-body">
-                                    <h6 class="card-title">{{ bot.name }}</h6>
+                                    <h6 class="card-title d-flex justify-content-between align-items-center">
+                                        {{ bot.name }}
+                                        <span class="tier-badge tier-{{ bot.tier }}" title="Tier {{ bot.tier }}">
+                                            {{ bot.tier }}
+                                        </span>
+                                    </h6>
                                     <p class="card-text text-muted small">{{ bot.description }}</p>
                                     <div class="text-center">
                                         <a href="{{ url_for('bot_detail', bot_id=bot_id) }}" class="btn btn-primary btn-sm">
