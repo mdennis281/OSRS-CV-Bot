@@ -1,6 +1,5 @@
 from core.osrs_client import RuneLiteClient, ToolplaneTab
 from core.item_db import ItemLookup
-from core import ocr
 from typing import List
 from core import tools
 import random
