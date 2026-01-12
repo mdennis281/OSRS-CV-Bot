@@ -78,6 +78,19 @@ class BotExecutor(Bot):
     It will mine pay-dirt, deposit it in the hopper, collect processed ore from the sack downstairs, and bank it.
     
     It needs to be babysat, has trouble determining if it's upstairs or downstairs sometimes.
+    
+    Tiles I use:
+    [
+    {"regionId":14936,"regionX":50,"regionY":41,"z":0,"color":"#FFFF0000"},
+    {"regionId":14936,"regionX":50,"regionY":40,"z":0,"color":"#FFFF0028"},
+    {"regionId":14936,"regionX":50,"regionY":39,"z":0,"color":"#FFFF0050"},
+    {"regionId":14936,"regionX":50,"regionY":38,"z":0,"color":"#FFFF0078"},
+    {"regionId":14936,"regionX":43,"regionY":45,"z":0,"color":"#FFFF00FF"},
+    {"regionId":14936,"regionX":36,"regionY":27,"z":0,"color":"#FF6432C8"},
+    {"regionId":14936,"regionX":47,"regionY":32,"z":0,"color":"#FF006464"},
+    {"regionId":14936,"regionX":43,"regionY":42,"z":0,"color":"#FFFF7000"},
+    {"regionId":14936,"regionX":43,"regionY":41,"z":0,"color":"#FF6CFFFF"}
+    ]
     """
     
     def __init__(self, config: BotConfig, user=''):
