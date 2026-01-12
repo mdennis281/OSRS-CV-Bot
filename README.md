@@ -17,7 +17,7 @@ https://github.com/user-attachments/assets/8d7b6eb6-8b16-466c-b32c-9fde9a23fa37
 https://github.com/user-attachments/assets/226daf47-361a-433d-89e3-dad1afb1c87a
 
 ### New UI (still a little buggy)
-![Control UI](https://private-user-images.githubusercontent.com/16827865/534314440-f62f9af1-29c6-4eb1-bd5b-223546f0e120.png)
+![Control UI](https://private-user-images.githubusercontent.com/16827865/534314440-f62f9af1-29c6-4eb1-bd5b-223546f0e120.png?jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3NjgyMzk2OTMsIm5iZiI6MTc2ODIzOTM5MywicGF0aCI6Ii8xNjgyNzg2NS81MzQzMTQ0NDAtZjYyZjlhZjEtMjljNi00ZWIxLWJkNWItMjIzNTQ2ZjBlMTIwLnBuZz9YLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFsPUFLSUFWQ09EWUxTQTUzUFFLNFpBJTJGMjAyNjAxMTIlMkZ1cy1lYXN0LTElMkZzMyUyRmF3czRfcmVxdWVzdCZYLUFtei1EYXRlPTIwMjYwMTEyVDE3MzYzM1omWC1BbXotRXhwaXJlcz0zMDAmWC1BbXotU2lnbmF0dXJlPTg2MmYxNDAxNGJjN2Y4Nzg0N2ZkOTBhOTQ4MGY2MTY1MzM0MzZiMjJjYWFmNjZjODBlYjAzM2MzYWI1MDc0NTMmWC1BbXotU2lnbmVkSGVhZGVycz1ob3N0In0.Osj9hQSlyQuVI2242Xo1u3ARMYWYFnKCzQ4O7WrgVz0)
 ![Bots UI](https://private-user-images.githubusercontent.com/16827865/534314598-01452975-af8b-4afc-8d4e-49452bb9ff54.png)
 ![Config UI](https://private-user-images.githubusercontent.com/16827865/534314697-991f52c1-dbc1-442d-8e56-b370007e7bce.png)
 
