@@ -35,6 +35,10 @@ python -m pip install -r requirements.txt
 python main.py
 ```
 
+### Hotkeys
+- **Page Up**: Terminate the bot immediately
+- **Page Down**: Pause/Resume the bot
+
 Direct bot invocation (need this for bots with complex params ie. list of items):
 Create new file
 ```python
