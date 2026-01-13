@@ -162,10 +162,7 @@ class BotExecutor(Bot):
         except ScriptTerminationException as e:
             self.log.info(f"Script termination requested: {e}")
             self.log.info("Exiting Motherload Miner Bot")
-            terminate = True
-        except Exception as e:
-            self.log.error(f"Fatal error: {e}")
-            raise
+            self.terminate = True
     
     def detect_location(self):
         """Detect if we are upstairs (mining area) or downstairs (banking area)"""

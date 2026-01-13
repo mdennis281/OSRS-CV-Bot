@@ -28,7 +28,7 @@ class BotExecutor(Bot):
     Setup:
     - Mark the Range tile with the configured color (Default: #FF0064 / 255,0,100)
     - Mark the Bank/Chest tile with the configured color (Default: #00FF64 / 0,255,100)
-    - Have Raw Karambwans (or configured food) in bank.
+    - Have Raw Karambwans (or configured food) in bank (visible when bank is opened)
     - Start near the bank/range.
     
     I havent used this one much, but it did run all night last i tried.

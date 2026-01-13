@@ -36,11 +36,13 @@ class BotExecutor(Bot):
     instructions: str = """
     This bot combines two specified items from the bank into a resulting item by clicking them in the inventory.
     It needs the bank tile set and the bank pin entered.
+    It also needs both items to be visible when the bank is opened.
     
-    Theres issues with the architecture of this bot, making it a bit dumb (AI generated)
+    Theres issues with the architecture of this bot, making it a bit dumb (AI generated).
     
-    Sometimes it starts walking away from the bank at the very beginning - not sure why.
-    Restarting typically fixes the problem.
+    Known bugs:
+        - On occasion, i see it randomly start walking around, clicking randomly.
+        This issue exclusively happens on startup, just restart the script and it should be fine.
     """
     
     def __init__(self, config: BotConfig, user: str = ""):
