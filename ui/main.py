@@ -385,9 +385,6 @@ class BotManager:
             # Create bot executor instance
             bot_executor = executor_class(bot_config, user=username)
             
-            # Reset control flags before starting the bot
-            ScriptControl().reset()
-            
             # Start the bot in a separate thread
             bot_thread = threading.Thread(target=bot_executor.start, daemon=True)
             bot_thread.start()

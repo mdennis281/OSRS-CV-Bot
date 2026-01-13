@@ -2,6 +2,7 @@ import time
 from functools import wraps
 from bots.core.cfg_types import BreakCfgParam
 from core.logger import get_logger
+import threading
 
 
 class SingletonMeta(type):
@@ -22,6 +23,8 @@ class ScriptControl(metaclass=SingletonMeta):
         self.break_config: BreakCfgParam = None
         self.log = get_logger("ScriptControl")
         self.start_listener()
+        
+        self._listener: threading.Thread = None
 
     
     def start_listener(self):
@@ -32,8 +35,8 @@ class ScriptControl(metaclass=SingletonMeta):
         We only act on PageUp/PageDown when the event is NOT from keypad. This
         prevents accidental termination/pause when using numpad navigation.
         """
-        import threading
-        threading.Thread(target=self._listen_for_control, daemon=True).start()
+        self._listener = threading.Thread(target=self._listen_for_control, daemon=True)
+        self._listener.start()
 
 
     def propose_break(self):
@@ -75,32 +78,30 @@ class ScriptControl(metaclass=SingletonMeta):
                     return
                 name = (e.name or '').lower()
                 is_keypad = getattr(e, 'is_keypad', False)
+                is_pageup = name in ('page up', 'pageup')
+                is_pagedown = name in ('page down', 'pagedown')
 
-                # Distinguish standard vs keypad
-                if name in ('page up', 'pageup'):
-                    if not is_keypad:  # real PageUp
-                        self.terminate = True
-                elif name in ('page down', 'pagedown'):
-                    if not is_keypad:  # real PageDown
-                        now = time.time()
-                        if now - last_pause_toggle >= toggle_cooldown:
-                            self.pause = not self.pause
-                            last_pause_toggle = now
+                # Is pageup and is not from numpad (Numpad 9)
+                if is_pageup and not is_keypad:
+                    self.terminate = True
+                # Is pagedown and is not from numpad (Numpad 3)
+                elif is_pagedown and not is_keypad:
+                    now = time.time()
+                    if now - last_pause_toggle >= toggle_cooldown:
+                        self.pause = not self.pause
+                        last_pause_toggle = now
                 else:
                     # Optional future: map dedicated keypad combo if desired
                     pass
             except Exception as ex:  # Never let hook raise
                 self.log.debug(f"Control hook error: {ex}")
 
-        keyboard.hook(handler)
+        hook = keyboard.hook(handler)
         # Keep thread alive until termination requested
         while not self.terminate:
             time.sleep(0.25)
-        # When terminate set, unhook all to clean up
-        try:
-            keyboard.unhook_all()
-        except Exception:
-            pass
+        keyboard.unhook(hook)
+        self.log.info("Control listener thread exiting.")
 
     @property
     def terminate(self):
@@ -118,9 +119,15 @@ class ScriptControl(metaclass=SingletonMeta):
     
     def reset(self):
         """Reset control flags to default states."""
+        self.log.info("Resetting ScriptControl state.")
         self._terminate = False
         self._pause = False
         self.break_until = 0
+        
+        # Ensure listener thread calls are responsive
+        if self._listener is None or not self._listener.is_alive():
+            self.log.info("Restarting control listener thread.")
+            self.start_listener()
 
     @pause.setter
     def pause(self, value: bool):

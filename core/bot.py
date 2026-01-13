@@ -11,17 +11,19 @@ from core import cv_debug
 class Bot:
     def __init__(self, user='', break_cfg: BreakCfgParam = None):
         self.log = get_logger(getattr(self, 'name', 'Bot'))
+        self.control = ScriptControl()
+        # Clear script control state on start
+        self.control.reset()
         self.client = RuneLiteClient(user)
         self.itemdb = ItemLookup()
         self.bank = BankInterface(self.client, self.itemdb)
         self.mover = MovementOrchestrator(self.client)
-        self.control = ScriptControl()
+        
 
         if break_cfg:
             self.control.break_config = break_cfg
         
         self.api = BotAPI(self.client)
-        
         # Always enable CV debug for bot monitoring
         debug_port = 5555  # Fixed port for CV debug
         if not cv_debug._enabled:
