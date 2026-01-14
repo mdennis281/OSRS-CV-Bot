@@ -325,6 +325,45 @@ def mask_above_color_value(
     return mask.convert("L")
 
 
+def calculate_color_percentage(
+    image: Image.Image,
+    target_color: Tuple[int, int, int],
+    tolerance: int = 30
+) -> float:
+    """
+    Calculate the percentage of pixels in the image that match the target color
+    within the specified tolerance. Returns a float between 0.0 and 1.0.
+    
+    Args:
+        image: PIL Image to analyze
+        target_color: (R, G, B) tuple of the target color
+        tolerance: Allowable difference per channel (0-255)
+        
+    Returns:
+        float: Percentage of matching pixels (0.0 to 1.0)
+    """
+    if image.mode != "RGB":
+        image = image.convert("RGB")
+        
+    # Use int16 to handle potential negative results from subtraction before abs to prevent wrap-around
+    img_arr = np.array(image, dtype=np.int16)
+    target = np.array(target_color, dtype=np.int16)
+    
+    # Calculate absolute difference per channel
+    # This creates a (H, W, 3) array of differences
+    diff = np.abs(img_arr - target)
+    
+    # Check matching pixels: all channels must be <= tolerance
+    # Axis 2 is the color channel dimension
+    matches = np.all(diff <= tolerance, axis=2)
+    
+    total_pixels = image.width * image.height
+    if total_pixels == 0:
+        return 0.0
+        
+    return np.count_nonzero(matches) / total_pixels
+
+
 from functools import wraps
 import time
 import inspect

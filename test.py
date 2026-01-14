@@ -17,10 +17,12 @@ from core.logger import get_logger
 
 log = get_logger('test')
 bot = Bot()
-client = bot.client
 
-sc = client.get_screenshot()
-sc.show()
+print(bot.bank.get_settings())
+bot.bank.set_default_quantity(10)
+bot.bank.set_default_quantity(14)
+bot.bank.set_withdraw_setting('Note')
+bot.bank.withdraw('Uncut diamond',14)
 # route = RouteParam([
 #     WaypointParam(3161,3477,0,809394,10)
 #     # WaypointParam(2956,3231,0,756115,10),
