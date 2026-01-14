@@ -22,9 +22,12 @@ class ScriptControl(metaclass=SingletonMeta):
         self.break_until: float = 0
         self.break_config: BreakCfgParam = None
         self.log = get_logger("ScriptControl")
+        self._listener: threading.Thread = None
+        
+        
         self.start_listener()
         
-        self._listener: threading.Thread = None
+        
 
     
     def start_listener(self):
@@ -35,8 +38,9 @@ class ScriptControl(metaclass=SingletonMeta):
         We only act on PageUp/PageDown when the event is NOT from keypad. This
         prevents accidental termination/pause when using numpad navigation.
         """
-        self._listener = threading.Thread(target=self._listen_for_control, daemon=True)
-        self._listener.start()
+        if self._listener is None or not self._listener.is_alive():
+            self._listener = threading.Thread(target=self._listen_for_control, daemon=True)
+            self._listener.start()
 
 
     def propose_break(self):
@@ -125,9 +129,7 @@ class ScriptControl(metaclass=SingletonMeta):
         self.break_until = 0
         
         # Ensure listener thread calls are responsive
-        if self._listener is None or not self._listener.is_alive():
-            self.log.info("Restarting control listener thread.")
-            self.start_listener()
+        self.start_listener()
 
     @pause.setter
     def pause(self, value: bool):
