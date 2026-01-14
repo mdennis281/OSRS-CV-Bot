@@ -32,7 +32,7 @@ class BotConfig(BotConfigMixin):
 class BotExecutor(Bot):
     name: str = "Item Combiner"
     description: str = "Combines two items (e.g., Battlestaff + Water orb)."
-    tier: str = "B"
+    tier: str = "A"
     instructions: str = """
     This bot combines two specified items from the bank into a resulting item by clicking them in the inventory.
     It needs the bank tile set and the bank pin entered.
@@ -110,6 +110,8 @@ class BotExecutor(Bot):
         a = self.bank.get_item_count(self.cfg.base_item.name)
         b = self.bank.get_item_count(self.cfg.second_item.name)
         self.log.info("%s: %s | %s: %s", self.cfg.base_item.name, a, self.cfg.second_item.name, b)
+        self.bank.set_default_quantity(14)
+        self.bank.set_withdraw_setting('item')
         self.bank.close()
         return min(a, b)
 
