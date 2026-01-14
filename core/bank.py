@@ -360,7 +360,7 @@ class BankInterface:
                 )
                 self.client.choose_right_click_opt('Set custom quantity')
                 
-                time.sleep(random.uniform(.3,.6))
+                time.sleep(random.uniform(.6,1))
                 
                 keyboard.write(str(option),delay=.2)
                 keyboard.press('enter')
