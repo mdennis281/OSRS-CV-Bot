@@ -27,6 +27,7 @@ import asyncio
 import websockets
 from datetime import datetime
 from dataclasses import dataclass, field, asdict
+from core import tools
 
 
 from flask import Flask, render_template, request, jsonify, redirect, url_for, flash
@@ -71,6 +72,16 @@ class BotInstance:
     start_time: float
     api_port: int
     status: str
+    start_time: float
+    
+    
+    def get_elapsed_time(self) -> float:
+        return time.time() - self.start_time
+    
+    def get_elapsed_time_hms(self) -> str:
+        elapsed = self.get_elapsed_time()
+        return tools.seconds_to_hms(elapsed)
+    
 
 # Global bot registry and running bot processes
 bot_registry: Dict[str, BotMetadata] = {}
@@ -310,11 +321,12 @@ def bot_monitoring_thread():
             if current_bot:
                 bot_instance = current_bot
                 thread = bot_instance.thread
-                bot_id = bot_instance.bot_id
-                
+                bot_id = bot_instance.bot_id                
                 # Check if the bot thread has terminated
                 if not thread.is_alive():
                     log.info(f"Bot {bot_id} thread has terminated")
+                    log.info(f"Bot {bot_id} ran for {bot_instance.get_elapsed_time_hms()}")
+                    
                     
                     # Send notification to UI
                     send_websocket_notification(f"Bot '{bot_id}' has terminated", "warning")
@@ -432,6 +444,7 @@ class BotManager:
             
             current_bot = None
             log.info(f"Stopped bot {bot_id}")
+            log.info(f"Bot {bot_id} ran for {bot_instance.get_elapsed_time_hms()}")
             return True
             
         except Exception as e:
