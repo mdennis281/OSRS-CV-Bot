@@ -92,8 +92,8 @@ class BankSettings:
             '1': self.quantity_1_btn,
             '5': self.quantity_5_btn,
             '10': self.quantity_10_btn,
-            'X': self.quantity_x_btn,
-            'All': self.quantity_all_btn
+            'x': self.quantity_x_btn,
+            'all': self.quantity_all_btn
         }
         
         best_option = '1'
