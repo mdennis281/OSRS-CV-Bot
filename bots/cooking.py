@@ -65,7 +65,7 @@ class BotExecutor(Bot):
         while self.client.is_moving(): 
             if self.terminate: return
             time.sleep(0.1)
-            
+        self.bank.set_quantity_setting('all')
         self.bank.deposit_inv()
         # Use item ID if available, otherwise name
         food_id = self.cfg.food.id if self.cfg.food.id else self.cfg.food.name
