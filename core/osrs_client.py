@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor, wait, FIRST_EXCEPTION, TimeoutError, as_completed
 
 from core import tools
-from core.control import ScriptControl
+from core.control import ScriptControl, ScriptTerminationException
 import os
 import sys
 import pyautogui
@@ -133,20 +133,27 @@ class GenericWindow:
         def _loop():
             last = _get_window_position()
             while not stop_evt.is_set():
+                if control.terminate:
+                    self.log.info('Term signaled, stopping resize watch polling.')
+                    break
                 if self.is_open:
                     position = _get_window_position()
                     if position != last:
                         last = position
-                        if on_resize:
-                            on_resize()
-                        else:
-                            self.on_resize()
+                        try:
+                            if on_resize:
+                                on_resize()
+                            else:
+                                self.on_resize()
+                        except ScriptTerminationException:
+                            break
                 stop_evt.wait(interval)
 
         stop_evt = threading.Event()
         threading.Thread(target=_loop, daemon=True).start()
         return stop_evt  # Caller can call .set() to stop
 
+    @control.guard
     def on_resize(self):
         """
         Default resize handler. Can be overridden by subclasses.
@@ -1204,6 +1211,7 @@ class RuneLiteClient(GenericWindow):
                 max_match = match
         return max_match
     
+    @control.guard
     def on_resize(self):
         """
         Handles the window resize event by recalculating UI sectors and components.
