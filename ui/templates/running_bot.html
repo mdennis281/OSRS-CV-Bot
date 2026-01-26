@@ -419,8 +419,8 @@ function initializeLogViewer() {
                 return;
             }
             
-            const wsUrl = `ws://localhost:${port}`;
-            console.log(`Connecting to WebSocket on port ${port}`);
+            const wsUrl = `ws://127.0.0.1:${port}`;
+            console.log(`Connecting to WebSocket on port ${port} (127.0.0.1)`);
             socket = new WebSocket(wsUrl);
             
             setupWebSocketHandlers(port);

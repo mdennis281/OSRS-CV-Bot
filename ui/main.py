@@ -300,7 +300,7 @@ def send_websocket_notification(message: str, message_type: str = "info"):
 async def _send_websocket_message(port: int, message: str, message_type: str):
     """Internal async function to send WebSocket message"""
     try:
-        uri = f"ws://localhost:{port}"
+        uri = f"ws://127.0.0.1:{port}"
         async with websockets.connect(uri) as websocket:
             await websocket.send(json.dumps({
                 "type": "notification",
@@ -887,7 +887,8 @@ def get_current_bot_status():
         return None
     return {
         'bot_id': current_bot.bot_id,
-        'status': BotManager.get_bot_status(current_bot.bot_id)
+        'status': BotManager.get_bot_status(current_bot.bot_id),
+        'api_port': current_bot.api_port
     }
 
 @app.context_processor

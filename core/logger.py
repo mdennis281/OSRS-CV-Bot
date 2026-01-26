@@ -200,6 +200,7 @@ def _start_websocket_server(host: str = "0.0.0.0", port: int = 18765) -> None:
     async def ws_handler(ws: websockets.WebSocketServerProtocol):
         # When a client connects, add it to our set
         _ws_clients.add(ws)
+        print(f"[WebSocketLogHandler] Client connected: {ws.remote_address}")
         client_subscriptions[ws] = None  # Subscribe to all loggers by default
         try:
             # Keep the connection open and handle messages
