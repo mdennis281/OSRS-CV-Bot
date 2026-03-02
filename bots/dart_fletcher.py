@@ -15,7 +15,7 @@ class BotConfig(BotConfigMixin):
     # Configuration parameters
 
     item1: ItemParam = ItemParam("Mithril dart tip")
-    item2: ItemParam = ItemParam("Feather")
+    item2: ItemParam = ItemParam(314)
     
     # Min confidence for item recognition
     item1_confidence: FloatParam = FloatParam(0.8)
