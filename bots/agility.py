@@ -24,7 +24,8 @@ class BotConfig(BotConfigMixin):
     action_keywords: StringListParam = StringListParam([
         'jump', 'climb', 'vault', 'gap', 'cross', 
         'rope', 'wall', '-up', 'grab', 'leap',
-        'cross', 'monkey', '-on', 'hurdle'
+        'cross', 'monkey', '-on', 'hurdle',
+        '-in'
     ])
 
     fail_max: IntParam = IntParam(10)
