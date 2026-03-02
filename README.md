@@ -3,7 +3,14 @@ A vibe coding experiment that has grown into a pretty impressive botting framewo
 
 I wouldn't recommend using this if you aren't willing to get your hands dirty writing some python.
 
+ > **Updated item database for sailing items!! wohoo** (no sailing bots yet though) Big shoutout to [DayV-git/osrsreboxed-db](https://github.com/DayV-git/osrsreboxed-db/tree/master) for keeping the items database up to date.
+
+## Known bugs:
+
+ > I have not rewritten the bank interface since the UI redesign by Jagex. Any bots interfacing heavily with the bank probably wont work.
+
  > Official support for **Windows** only, sorry
+
 
  ## Setup
 
