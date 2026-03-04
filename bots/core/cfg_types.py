@@ -867,4 +867,71 @@ class RGBListParam:
         return iter(self._value)
 
 
-TYPES = (RGBParam, WaypointParam, RouteParam, RangeParam, BreakCfgParam, ItemParam, BooleanParam, StringParam, IntParam, FloatParam, StringListParam, RGBListParam)
+class ItemListParam:
+    """List of Item parameters"""
+    
+    def __init__(self, value: List[ItemParam] = None):
+        self._value = list(value) if value else []
+    
+    @staticmethod
+    def type() -> str:
+        return "ItemList"
+    
+    @property
+    def value(self) -> List[ItemParam]:
+        return self._value.copy()
+    
+    @value.setter
+    def value(self, val: List[ItemParam]):
+        self._value = list(val)
+    
+    @staticmethod
+    def load(value: List[Any]) -> 'ItemListParam':
+        """Load ItemListParam from list of item identifiers (ids, names, or dicts)"""
+        item_params = [ItemParam.load(item) for item in value]
+        return ItemListParam(item_params)
+    
+    def to_json(self) -> Dict[str, Any]:
+        """Export as JSON-serializable dict"""
+        return {
+            "type": self.type(),
+            "value": [item.to_json() for item in self._value]
+        }
+    
+    @classmethod
+    def from_json(cls, data: Dict[str, Any]) -> 'ItemListParam':
+        """Import from JSON data"""
+        if data.get("type") != cls.type():
+            raise ValueError(f"Expected type '{cls.type()}', got '{data.get('type')}'")
+        
+        item_params = []
+        for item_data in data["value"]:
+            if isinstance(item_data, dict) and item_data.get("type") == "Item":
+                item_params.append(ItemParam.from_json(item_data))
+            else:
+                item_params.append(ItemParam.load(item_data))
+        
+        return cls(item_params)
+    
+    def append(self, item: ItemParam):
+        """Add an item to the list"""
+        self._value.append(item)
+    
+    def remove(self, index: int):
+        """Remove an item by index"""
+        del self._value[index]
+    
+    def __repr__(self):
+        return f"ItemListParam({self._value})"
+    
+    def __len__(self):
+        return len(self._value)
+    
+    def __getitem__(self, index):
+        return self._value[index]
+    
+    def __iter__(self):
+        return iter(self._value)
+
+
+TYPES = (RGBParam, WaypointParam, RouteParam, RangeParam, BreakCfgParam, ItemParam, ItemListParam, BooleanParam, StringParam, IntParam, FloatParam, StringListParam, RGBListParam)

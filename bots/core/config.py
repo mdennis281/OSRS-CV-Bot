@@ -1,4 +1,4 @@
-from .cfg_types import RGBParam, RangeParam, BreakCfgParam, WaypointParam, RouteParam, ItemParam
+from .cfg_types import RGBParam, RangeParam, BreakCfgParam, WaypointParam, RouteParam, ItemParam, ItemListParam
 from .cfg_types import TYPES as CFG_TYPES
 import json
 from typing import Any, Dict, Union
@@ -11,6 +11,7 @@ TYPE_MAP = {
     "Waypoint": WaypointParam,
     "Route": RouteParam,
     "Item": ItemParam,
+    "ItemList": ItemListParam,
 }
 
 example_config = {
