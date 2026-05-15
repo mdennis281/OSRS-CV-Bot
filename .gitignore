@@ -173,3 +173,8 @@ data/configs/*.json
 
 # Node
 node_modules/
+
+# Frontend build is committed so users can run `python main.py` without Node.
+# This override must come AFTER the generic `dist/` rule near the top of this file.
+!ui_v2/frontend/dist/
+!ui_v2/frontend/dist/**

@@ -585,15 +585,18 @@ class RuneLiteClient(GenericWindow):
             raise ValueError(f'Item: {item_identifier} is not resolved.')
         sc = self.get_screenshot()
         count_pixels = 13
-        
+
         if parent_match:
             sc = parent_match.crop_in(sc)
-            
+
         ico = item.icon
         if ignore_count:
-            ico = ico.crop(
-                (0,count_pixels,ico.width,ico.height)
-            )
+            # Need at least 12 rows of icon left for a discriminating template.
+            count_pixels = min(count_pixels, max(0, ico.height - 12))
+            if count_pixels > 0:
+                ico = ico.crop(
+                    (0, count_pixels, ico.width, ico.height)
+                )
         matches_to_find = hover_verify_retry if hover_verify else 1
         options = tools.find_subimages(
             parent=sc, template=ico,
@@ -632,8 +635,11 @@ class RuneLiteClient(GenericWindow):
                 parent_match.start_y
             )
         if ignore_count:
-            ans.start_x -= count_pixels
-        
+            # The template was the icon with its top `count_pixels` rows removed,
+            # so the match bbox covers only the bottom of the icon. Extend the
+            # bbox upward so the returned region reflects the full icon.
+            ans.start_y -= count_pixels
+
         return ans
             
         

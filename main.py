@@ -1,62 +1,56 @@
 #!/usr/bin/env python3
 """
-OSRS Bot Management System
-
-This is the main entry point for the OSRS bot management system.
-It starts the web UI server that allows you to manage and control bots.
+OSRS Bot Management System – entry point.
 
 Usage:
-    python main.py
-
-The web interface will be available at:
-    http://localhost:8010
+    python main.py              Serve the production UI (no Node required)
+    python main.py --reloader   Run with hot-reload for frontend & backend dev
+    python main.py --port 8010  Override the default port
+    python main.py --cv-debug   Start the cv_debug Flask server on port 5055
 """
 
-import sys
+import argparse
 import os
+import sys
 from pathlib import Path
 
-# Add the project root to Python path
-project_root = Path(__file__).parent
-sys.path.insert(0, str(project_root))
+# Ensure project root is on sys.path
+sys.path.insert(0, str(Path(__file__).parent))
 
-# Import and start the UI server
-from ui.main import app, initialize_app
 
-def main():
-    """Start the OSRS Bot Management UI"""
-    print("=" * 60)
-    print("🤖 OSRS Bot Management System")
-    print("=" * 60)
-    print()
-    print("Initializing bot discovery and UI server...")
-    
-    # Initialize the application (discover bots, etc.)
-    initialize_app()
-    
-    print()
-    print("🚀 Starting web server...")
-    print("📱 Web interface available at: http://localhost:8010")
-    print("📋 Dashboard: http://localhost:8010")
-    print()
-    print("Press Ctrl+C to stop the server")
-    print("=" * 60)
-    
-    try:
-        # Start the Flask development server
-        app.run(
-            host='0.0.0.0', 
-            port=8010, 
-            debug=False,  # Set to False for production-like behavior
-            threaded=True
-        )
-    except KeyboardInterrupt:
-        print("\n👋 Shutting down bot management system...")
-    except Exception as e:
-        print(f"\n❌ Error starting server: {e}")
-        return 1
-    
-    return 0
+def main() -> int:
+    parser = argparse.ArgumentParser(description="OSRS Bot Management System")
+    parser.add_argument(
+        "--reloader",
+        action="store_true",
+        help="Run with hot-reload (requires Node.js for frontend dev server)",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8010,
+        help="Port for the backend server (default: 8010)",
+    )
+    parser.add_argument(
+        "--host",
+        default="0.0.0.0",
+        help="Host to bind to (default: 0.0.0.0)",
+    )
+    parser.add_argument(
+        "--cv-debug",
+        action="store_true",
+        help="Start the cv_debug Flask server on port 5055 (powers /api/cv-debug/* proxy)",
+    )
+    args = parser.parse_args()
+
+    # Propagate to the FastAPI lifespan (also survives uvicorn's reload subprocess fork).
+    if args.cv_debug:
+        os.environ["AUTO_RS_CV_DEBUG"] = "1"
+
+    from ui_v2.server import run
+
+    return run(host=args.host, port=args.port, reloader=args.reloader)
+
 
 if __name__ == "__main__":
     sys.exit(main())

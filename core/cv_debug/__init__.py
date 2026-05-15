@@ -15,7 +15,7 @@ from core.region_match import MatchResult
 
 
 # Runtime state
-_enabled = False
+_enabled = True
 _started = False
 _lock = threading.Lock()
 

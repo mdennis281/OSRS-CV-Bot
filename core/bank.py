@@ -8,84 +8,119 @@ import keyboard
 from core.input.mouse_control import ClickType
 import time
 import random
+import re
 from typing import List
+
+
+def _extract_trailing_quantity(text: str) -> int | None:
+    """Best-effort extraction of the trailing number from OCR'd hover text.
+
+    Only the trailing digit group is considered, so noisy label characters
+    like 'Defau1t Qun1ty' don't bleed into the result. Comma- and
+    space-separated thousands are normalised.
+
+    Examples:
+        'Default quantity: 13'        -> 13
+        'Default quantity: 130,000'   -> 130000
+        'defauit quntity: 13'         -> 13
+        'Defau1t Qun1ty 120 000'      -> 120000
+    """
+    if not text:
+        return None
+    cleaned = text.rstrip().rstrip(' .,:;|/\\')
+    # Grouped thousands: "130,000" or "120 000"
+    m = re.search(r'(\d{1,3}(?:[, ]\d{3})+)\s*$', cleaned)
+    if m:
+        return int(re.sub(r'[, ]', '', m.group(1)))
+    # Plain trailing digits
+    m = re.search(r'(\d+)\s*$', cleaned)
+    if m:
+        return int(m.group(1))
+    return None
 
 
 
 # load into memory now for faster loads
 BANK_BR = Image.open('data/ui/bank-bottom-right.png')
 BANK_TL = Image.open('data/ui/bank-top-left.png')
+# bank-top-left.png is cropped from inside the bank window (skipping the title
+# bar) because OSRS action/hover text overlays the title row and corrupts a
+# top-of-window template. Subtract this offset when computing bank_match.start_y
+# so the resulting region still spans the full bank like callers expect.
+BANK_TL_Y_OFFSET = 40
 BANK_DEPO_INV = Image.open('data/ui/bank-deposit-inv.png')
 BANK_SEARCH = Image.open('data/ui/bank-search.png')
 BANK_CLOSE = Image.open('data/ui/close-ui-element.png')
 BANK_TAB = Image.open('data/ui/bank-tab.png')
 BANK_ARROW_UP = Image.open('data/ui/bank-scroll-up.png')
 BANK_ARROW_DOWN = BANK_ARROW_UP.rotate(180)
+BANK_REARRANGE_SWAP = Image.open('data/ui/bank-rearrange-swap.png')
+BANK_REARRANGE_INSERT = Image.open('data/ui/bank-rearrange-insert.png')
 
 
 class BankSettings:
+    """
+    Offsets are relative to bank_match. bank_match.start_x/start_y is the
+    bank window's top-left corner; bank_match.end_x/end_y is its bottom-right
+    corner. The bottom button row sits at end_y - 37 .. end_y - 11.
+    """
     def __init__(self, bank_match: tools.MatchResult):
         self._selected_color: tuple[int,int,int] = (126,30,28)
-        
-        self.rearrange_swap_btn = tools.MatchResult(
-            start_x = bank_match.start_x + 4,
-            start_y = bank_match.end_y - 26,
-            end_x = bank_match.start_x + 44,
-            end_y = bank_match.end_y - 7
+
+        sx = bank_match.start_x
+        ey = bank_match.end_y
+        # Bottom button row vertical range. bank_match starts at (0,0) of the
+        # bank window and ends at (495, 708) in reference coords; the button
+        # row sits at y=668..694 (so end_y - 40 .. end_y - 14).
+        y_top = ey - 40
+        y_bot = ey - 14
+
+        # Rearrange (Swap/Insert) is a single toggle button; clicking cycles the icon.
+        self.rearrange_btn = tools.MatchResult(
+            start_x = sx + 18,
+            start_y = y_top,
+            end_x   = sx + 50,
+            end_y   = y_bot,
         )
-        self.rearrange_insert_btn = self.rearrange_swap_btn.transform(50,0)
-        
-        self.withdraw_item_btn = self.rearrange_insert_btn.transform(50,0)
-        self.withdraw_note_btn = self.withdraw_item_btn.transform(50,0)
-        
-        self.quantity_1_btn = tools.MatchResult(
-            start_x = bank_match.start_x + 204,
-            start_y = bank_match.end_y - 26,
-            end_x = bank_match.start_x + 218,
-            end_y = bank_match.end_y - 7
+        # Withdraw (Item/Note) is a single toggle button (parchment icon).
+        self.withdraw_btn = tools.MatchResult(
+            start_x = sx + 55,
+            start_y = y_top,
+            end_x   = sx + 87,
+            end_y   = y_bot,
         )
-        
-        self.quantity_5_btn = self.quantity_1_btn.transform(25,0)
-        self.quantity_10_btn = self.quantity_5_btn.transform(25,0)
-        self.quantity_x_btn = self.quantity_10_btn.transform(25,0)
-        self.quantity_all_btn = self.quantity_x_btn.transform(25,0)
-    
+
+        # Quantity row: 1 / 5 / 10 / X / All, ~37px pitch.
+        def q_btn(off_x_start: int, off_x_end: int) -> tools.MatchResult:
+            return tools.MatchResult(
+                start_x = sx + off_x_start,
+                start_y = y_top,
+                end_x   = sx + off_x_end,
+                end_y   = y_bot,
+            )
+        self.quantity_1_btn   = q_btn( 92, 126)
+        self.quantity_5_btn   = q_btn(130, 162)
+        self.quantity_10_btn  = q_btn(167, 199)
+        self.quantity_x_btn   = q_btn(204, 236)
+        self.quantity_all_btn = q_btn(241, 273)
+
     def get_rearrange_setting(self, sc: Image.Image) -> str:
-        rs_img = self.rearrange_swap_btn.crop_in(sc)
-        ri_img = self.rearrange_insert_btn.crop_in(sc)
-        
-        rs_likelihood = tools.calculate_color_percentage(
-            rs_img, 
-            self._selected_color,
-            tolerance=20
-        )
-        ri_likelihood = tools.calculate_color_percentage(
-            ri_img,
-            self._selected_color,
-            tolerance=20
-        )
-        if rs_likelihood > ri_likelihood:
-            return 'Swap'
-        return 'Insert'
-    
+        """Match swap/insert icon templates against the rearrange button area."""
+        btn_img = self.rearrange_btn.crop_in(sc)
+        swap_m = tools.find_subimage(btn_img, BANK_REARRANGE_SWAP, min_scale=1, max_scale=1)
+        ins_m  = tools.find_subimage(btn_img, BANK_REARRANGE_INSERT, min_scale=1, max_scale=1)
+        return 'Swap' if swap_m.confidence > ins_m.confidence else 'Insert'
+
     def get_withdraw_setting(self, sc: Image.Image) -> str:
-        wi_img = self.withdraw_item_btn.crop_in(sc)
-        wn_img = self.withdraw_note_btn.crop_in(sc)
-        
-        wi_likelihood = tools.calculate_color_percentage(
-            wi_img,
-            self._selected_color,
-            tolerance=20
-        )
+        """Note mode lights the parchment button red; otherwise it's grey (Item)."""
+        wn_img = self.withdraw_btn.crop_in(sc)
         wn_likelihood = tools.calculate_color_percentage(
             wn_img,
             self._selected_color,
             tolerance=20
         )
-        
-        if wi_likelihood > wn_likelihood:
-            return 'Item'
-        return 'Note'
+        # Any meaningful red coverage means the toggle is active.
+        return 'Note' if wn_likelihood > 0.05 else 'Item'
 
     def get_quantity_setting(self, sc: Image.Image) -> str:
         buttons = {
@@ -117,23 +152,17 @@ class BankSettings:
         Returns the MatchResult for the given category and option.
         Valid categories: 'Rearrange', 'Withdraw', 'Quantity'
         Valid options:
-            - Rearrange: 'Swap', 'Insert'
-            - Withdraw: 'Item', 'Note'
+            - Rearrange: 'Swap', 'Insert' (both return the same toggle button)
+            - Withdraw: 'Item', 'Note' (both return the same toggle button)
             - Quantity: '1', '5', '10', 'X', 'All'
         """
         category = category.lower()
         option = str(option).lower()
-        
+
         if category == 'rearrange':
-            if option == 'swap':
-                return self.rearrange_swap_btn
-            else:
-                return self.rearrange_insert_btn
+            return self.rearrange_btn
         elif category == 'withdraw':
-            if option == 'item':
-                return self.withdraw_item_btn
-            else:
-                return self.withdraw_note_btn
+            return self.withdraw_btn
         elif category == 'quantity':
             if option == '1':
                 return self.quantity_1_btn
@@ -210,11 +239,10 @@ class BankInterface:
             return True
     
     def get_item_count(
-        self, 
-        item_id:str|int, 
-        min_confidence:float=0.9,
+        self,
+        item_id:str|int,
+        min_confidence:float=0.7,
         hover_verify:bool=True
-        
         ) -> int:
         if not self.is_open: raise ValueError('Bank is not open')
 
@@ -228,6 +256,7 @@ class BankInterface:
             item=item,
             parent_match=self.bank_match,
             hover_verify=hover_verify,
+            hover_verify_retry=3,
             ignore_count=True,
             min_confidence=min_confidence
         )
@@ -342,16 +371,39 @@ class BankInterface:
             rand_move_chance=0.3
         )
         
+    def _read_x_quantity_hover(self) -> int | None:
+        """Hover the X quantity button and read its tooltip to learn the
+        currently-bound custom quantity. Returns None if no number could be
+        extracted (OCR garbage, tooltip not visible, etc.).
+        """
+        btn = self.bs.quantity_x_btn
+        try:
+            self.client.move_to(btn, rand_move_chance=0)
+            time.sleep(random.uniform(0.6, 0.9))  # let tooltip render
+            raw = self.client.hover_text or ''
+        except Exception as e:
+            self.log.debug(f'X hover read failed: {e}')
+            return None
+        n = _extract_trailing_quantity(raw)
+        self.log.info(f"X hover: raw='{raw}' extracted={n}")
+        return n
+
     def set_default_quantity(self, option:int):
         if not self.is_open: raise ValueError('Bank is not open')
-        
+
         if self.default_quantity == option:
             return
-        
+
         if option in [1,5,10]:
             self.set_quantity_setting(str(option))
         else:
             btn = self.bs.quantity_x_btn
+            # Best-effort sync of last_custom_quantity by reading the X
+            # button's hover tooltip ("Default quantity: <N>"). If it
+            # already matches our target we can skip the right-click reset.
+            observed = self._read_x_quantity_hover()
+            if observed is not None:
+                self.last_custom_quantity = observed
             self.set_quantity_setting('X')
             if option != self.last_custom_quantity:
                 self.client.click(
@@ -359,9 +411,9 @@ class BankInterface:
                     after_click_settle_chance=0, rand_move_chance=0
                 )
                 self.client.choose_right_click_opt('Set custom quantity')
-                
+
                 time.sleep(random.uniform(.6,1))
-                
+
                 keyboard.write(str(option),delay=.2)
                 keyboard.press('enter')
                 self.last_custom_quantity = option
@@ -414,10 +466,10 @@ class BankInterface:
         for m in [tl,br]:
             if m.confidence < .96:
                 raise ValueError('Bank is probably not open')
-            
+
         self.bank_match = tools.MatchResult(
             start_x=tl.start_x,
-            start_y=tl.start_y,
+            start_y=tl.start_y - BANK_TL_Y_OFFSET,
             end_x=br.end_x,
             end_y=br.end_y
         )

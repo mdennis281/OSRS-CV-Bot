@@ -92,7 +92,9 @@ class ItemLookup:
 
     def _load_data(self):
         """
-        Loads data from JSON files, filters out duplicates, and populates the item cache.
+        Loads data from JSON files, filters out duplicates, populates the item cache,
+        and synthesizes noted variants from canonicals (upstream cache only ships
+        canonical entries; noted lookups need an entry per linked_id_noted).
         """
         try:
             with open("data/items/items-cache-data.json", "r") as f:
@@ -104,22 +106,21 @@ class ItemLookup:
             # Import here to avoid circulars at module import time
             from core.tools import base64_to_image, crop_transparent_border, image_to_base64
 
+            def _crop_icon(b64: Optional[str], item_id: int, item_name: str) -> Optional[str]:
+                if not b64:
+                    return None
+                try:
+                    img = base64_to_image(b64)
+                    cropped = crop_transparent_border(img)
+                    return image_to_base64(cropped, fmt="PNG")
+                except Exception as e:
+                    self.log.debug(f"Icon crop failed for item {item_id} - {item_name}: {e}")
+                    return b64
+
+            # Pass 1: load canonicals
             for item in items_data.values():
                 # Filter out duplicates: only include items with linked_id_item=None and linked_id_placeholder!=None
                 if (item["linked_id_item"] is None and item["linked_id_placeholder"] is not None) or item["id"] not in self._items_by_id.keys():
-                    icon_b64 = icons_data.get(str(item["id"]))
-
-                    # Crop transparent borders if icon exists
-                    if icon_b64:
-                        try:
-                            img = base64_to_image(icon_b64)
-                            cropped = crop_transparent_border(img)
-                            icon_b64 = image_to_base64(cropped, fmt="PNG")
-                        except Exception as e:
-                            # Keep original icon if something goes wrong, but log once
-                            self.log.debug(f"Icon crop failed for item {item['id']} - {item['name']}: {e}")
-
-                    # Create an Item dataclass
                     item_obj = Item(
                         id=item["id"],
                         name=item["name"],
@@ -133,12 +134,37 @@ class ItemLookup:
                         cost=item["cost"],
                         lowalch=item["lowalch"],
                         highalch=item["highalch"],
-                        icon_b64=icon_b64
+                        icon_b64=_crop_icon(icons_data.get(str(item["id"])), item["id"], item["name"]),
                     )
 
                     # Populate lookup dictionaries
                     self._items_by_id[item_obj.id] = item_obj
                     self._items_by_name[item_obj.name.lower()] = item_obj
+
+            # Pass 2: synthesize noted variants from canonicals.
+            # Upstream cache (DayV-git/osrsreboxed-db) ships only canonicals; noted variants
+            # were previously hand-baked into the cache file. Deriving them here keeps the
+            # cache file in sync with upstream without manual augmentation.
+            # Noted ids are looked up by id only (name lookups still resolve to canonical).
+            for raw in list(items_data.values()):
+                noted_id = raw.get("linked_id_noted")
+                if noted_id is None or noted_id in self._items_by_id:
+                    continue
+                self._items_by_id[noted_id] = Item(
+                    id=noted_id,
+                    name=raw["name"],
+                    tradeable_on_ge=raw["tradeable_on_ge"],
+                    members=raw["members"],
+                    noted=True,
+                    noteable=True,
+                    placeholder=False,
+                    stackable=raw["stackable"],
+                    equipable=raw["equipable"],
+                    cost=raw["cost"],
+                    lowalch=raw["lowalch"],
+                    highalch=raw["highalch"],
+                    icon_b64=_crop_icon(icons_data.get(str(noted_id)), noted_id, raw["name"]),
+                )
 
         except Exception as e:
             raise RuntimeError(f"Failed to load item data: {e}")
