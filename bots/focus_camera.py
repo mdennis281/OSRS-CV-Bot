@@ -9,6 +9,8 @@ import random
 import pyautogui
 import keyboard
 
+from core.input.mouse_control import _set_cursor
+
 
 control = ScriptControl()
 
@@ -118,12 +120,14 @@ class BotExecutor(Bot):
         duration = random.uniform(dur_lo, dur_hi)
         end_at = time.time() + duration
 
-        # Start with a quick mouse move to center to avoid edges
+        # Start with a quick mouse move to center to avoid edges.
+        # _set_cursor is virtual-desktop aware; pyautogui.moveTo would clamp
+        # to the primary monitor when RuneLite is on a secondary display.
         try:
             cx = self.client.window.left + self.client.window.width // 2
             cy = self.client.window.top + self.client.window.height // 2
-            pyautogui.moveTo(cx, cy, _pause=0)
-        except (pyautogui.FailSafeException, OSError, RuntimeError):
+            _set_cursor(cx, cy)
+        except (OSError, RuntimeError):
             pass
 
         # randomly decide which method to prefer per jiggle window
@@ -166,8 +170,8 @@ class BotExecutor(Bot):
 
         # ensure cursor is within window before dragging
         try:
-            pyautogui.moveTo(cx, cy, _pause=0)
-        except (pyautogui.FailSafeException, OSError, RuntimeError):
+            _set_cursor(cx, cy)
+        except (OSError, RuntimeError):
             return
 
         start = time.time()

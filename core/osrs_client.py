@@ -479,7 +479,8 @@ class RuneLiteClient(GenericWindow):
         """
         Returns the current mouse position relative to the RuneLite window.
         """
-        x, y = pyautogui.position()
+        from core.input.mouse_control import _get_cursor
+        x, y = _get_cursor()
         return (x - self.window.left, y - self.window.top)
 
     @timeit

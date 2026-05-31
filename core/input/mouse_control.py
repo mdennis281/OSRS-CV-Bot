@@ -12,7 +12,7 @@ if __name__ == "__main__":
             )
         )
     )
-import ctypes, math, random, time
+import ctypes, math, random, sys, time
 import pyautogui, keyboard
 from core.logger import get_logger
 from core.tools import MatchResult          # your class
@@ -22,6 +22,138 @@ from typing import Tuple
 
 control = ScriptControl()
 log = get_logger("MouseControl")
+
+# ── multi-monitor-safe cursor I/O ───────────────────────────
+# Background:
+#  - pyautogui.moveTo() on Windows uses mouse_event() + MOUSEEVENTF_ABSOLUTE,
+#    which normalizes 0..65535 coords against the *primary* monitor only.
+#    Any target past the primary monitor's bounds is silently clamped to
+#    its edge — breaking bots on multi-monitor setups.
+#  - Worse, when the Python process is DPI-Unaware (the default), GetCursorPos
+#    (which pyautogui.position() uses) returns *DPI-virtualized* coordinates
+#    that can also clamp to the primary monitor. That's the actual cause of
+#    the "Mouse off target by ... got Point(x=3439, ...)" warnings we saw:
+#    the cursor may have moved correctly, but the read came back clamped.
+#
+# The fix uses the "Physical" Win32 APIs — they always operate in raw,
+# non-virtualized pixel coordinates across the entire virtual desktop,
+# regardless of the process's DPI awareness:
+#   GetPhysicalCursorPos / SetPhysicalCursorPos
+#
+# We also keep a SendInput(VIRTUALDESK) fallback for environments where the
+# Physical APIs aren't available (RDP sessions sometimes block them).
+if sys.platform == "win32":
+    from ctypes import wintypes
+
+    _user32 = ctypes.windll.user32
+
+    # Best-effort: also opt into per-monitor DPI awareness. This doesn't gate
+    # the Physical APIs (they work either way) but it makes pyautogui.position()
+    # and pygetwindow rectangles consistent if anything else in the process
+    # reads them. Logged once for diagnostics.
+    _dpi_status = "unchanged"
+    try:
+        if _user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4)):
+            _dpi_status = "per-monitor-v2"
+        else:
+            raise OSError("SetProcessDpiAwarenessContext returned 0")
+    except Exception:
+        try:
+            hr = ctypes.windll.shcore.SetProcessDpiAwareness(2)
+            _dpi_status = "per-monitor" if hr == 0 else f"shcore-hr={hr}"
+        except Exception as exc:
+            _dpi_status = f"failed ({exc})"
+
+    # SendInput plumbing (used only as fallback for the Physical APIs).
+    _INPUT_MOUSE = 0
+    _MOUSEEVENTF_MOVE = 0x0001
+    _MOUSEEVENTF_ABSOLUTE = 0x8000
+    _MOUSEEVENTF_VIRTUALDESK = 0x4000
+    _SM_XVIRTUALSCREEN = 76
+    _SM_YVIRTUALSCREEN = 77
+    _SM_CXVIRTUALSCREEN = 78
+    _SM_CYVIRTUALSCREEN = 79
+
+    class _MOUSEINPUT(ctypes.Structure):
+        _fields_ = [
+            ("dx", wintypes.LONG),
+            ("dy", wintypes.LONG),
+            ("mouseData", wintypes.DWORD),
+            ("dwFlags", wintypes.DWORD),
+            ("time", wintypes.DWORD),
+            ("dwExtraInfo", ctypes.c_void_p),
+        ]
+
+    class _INPUT_UNION(ctypes.Union):
+        _fields_ = [("mi", _MOUSEINPUT)]
+
+    class _INPUT(ctypes.Structure):
+        _anonymous_ = ("u",)
+        _fields_ = [("type", wintypes.DWORD), ("u", _INPUT_UNION)]
+
+    _user32.SendInput.argtypes = (wintypes.UINT, ctypes.POINTER(_INPUT), ctypes.c_int)
+    _user32.SendInput.restype = wintypes.UINT
+    _user32.GetPhysicalCursorPos.argtypes = (ctypes.POINTER(wintypes.POINT),)
+    _user32.GetPhysicalCursorPos.restype = wintypes.BOOL
+    _user32.SetPhysicalCursorPos.argtypes = (ctypes.c_int, ctypes.c_int)
+    _user32.SetPhysicalCursorPos.restype = wintypes.BOOL
+
+    def _send_input_move(x: int, y: int) -> bool:
+        """Fallback move via SendInput with VIRTUALDESK normalization."""
+        vs_x = _user32.GetSystemMetrics(_SM_XVIRTUALSCREEN)
+        vs_y = _user32.GetSystemMetrics(_SM_YVIRTUALSCREEN)
+        vs_w = _user32.GetSystemMetrics(_SM_CXVIRTUALSCREEN)
+        vs_h = _user32.GetSystemMetrics(_SM_CYVIRTUALSCREEN)
+        if vs_w <= 1 or vs_h <= 1:
+            return bool(_user32.SetCursorPos(int(x), int(y)))
+
+        nx = ((int(x) - vs_x) * 65535 + (vs_w - 1) // 2) // (vs_w - 1)
+        ny = ((int(y) - vs_y) * 65535 + (vs_h - 1) // 2) // (vs_h - 1)
+
+        mi = _MOUSEINPUT(
+            dx=nx, dy=ny, mouseData=0,
+            dwFlags=_MOUSEEVENTF_MOVE | _MOUSEEVENTF_ABSOLUTE | _MOUSEEVENTF_VIRTUALDESK,
+            time=0, dwExtraInfo=None,
+        )
+        inp = _INPUT(type=_INPUT_MOUSE)
+        inp.mi = mi
+        return _user32.SendInput(1, ctypes.byref(inp), ctypes.sizeof(_INPUT)) == 1
+
+    def _set_cursor(x: int, y: int) -> None:
+        """Move the OS cursor to absolute (x, y) on the virtual desktop.
+        Uses SetPhysicalCursorPos (DPI-virtualization-immune); falls back to
+        SendInput(VIRTUALDESK), then to SetCursorPos."""
+        ix, iy = int(x), int(y)
+        if _user32.SetPhysicalCursorPos(ix, iy):
+            return
+        if _send_input_move(ix, iy):
+            return
+        _user32.SetCursorPos(ix, iy)
+
+    def _get_cursor() -> Tuple[int, int]:
+        """Read OS cursor position in physical (non-virtualized) coords."""
+        pt = wintypes.POINT()
+        if _user32.GetPhysicalCursorPos(ctypes.byref(pt)):
+            return (pt.x, pt.y)
+        # Fallback for sessions where the Physical API is blocked.
+        if _user32.GetCursorPos(ctypes.byref(pt)):
+            return (pt.x, pt.y)
+        return pyautogui.position()
+
+    log.info(
+        f"Cursor I/O initialized (DPI: {_dpi_status}, "
+        f"virtual desktop: "
+        f"{_user32.GetSystemMetrics(_SM_XVIRTUALSCREEN)},"
+        f"{_user32.GetSystemMetrics(_SM_YVIRTUALSCREEN)} "
+        f"{_user32.GetSystemMetrics(_SM_CXVIRTUALSCREEN)}x"
+        f"{_user32.GetSystemMetrics(_SM_CYVIRTUALSCREEN)})"
+    )
+else:
+    def _set_cursor(x: int, y: int) -> None:
+        pyautogui.moveTo(int(x), int(y), _pause=0)
+
+    def _get_cursor() -> Tuple[int, int]:
+        return tuple(pyautogui.position())
 
 class ClickType(Enum):
     LEFT = 1
@@ -138,7 +270,7 @@ def click(
 
     _block(True)
     try:
-        is_already_there = pyautogui.position() == (x,y)
+        is_already_there = _get_cursor() == (x, y)
         if x >= 0 and y >= 0 and not is_already_there:
             move_to(x, y)
 
@@ -206,7 +338,7 @@ def move_to(
         lo = random.randint(2, 8)
         wobble_px = (lo, lo + random.randint(2, 8))
 
-    sx, sy = pyautogui.position()
+    sx, sy = _get_cursor()
     dist0  = _euclidean((sx, sy), (tx, ty))
     if dist0 < 1:
         return
@@ -317,13 +449,13 @@ def move_to(
                     
                     # Apply direction constraints more smoothly
                     x, y = _constrain_travel(
-                        pyautogui.position(), (x, y), wp,
+                        _get_cursor(), (x, y), wp,
                         max_direction_change
                     )
-                    
+
                     # Prevent large jumps - limit maximum pixel movement per step
                     if not is_simulation:
-                        curr_pos = pyautogui.position()
+                        curr_pos = _get_cursor()
                         step_dist = _euclidean(curr_pos, (x, y))
                         max_step_dist = 30  # Maximum pixels per step
                         
@@ -333,11 +465,12 @@ def move_to(
                             x = curr_pos[0] + (x - curr_pos[0]) * ratio
                             y = curr_pos[1] + (y - curr_pos[1]) * ratio
                     
-                    x = max(1, int(x))
-                    y = max(1, int(y))
-                    
-                    # Move to the new position
-                    pyautogui.moveTo(x, y, _pause=0)
+                    x = int(x)
+                    y = int(y)
+
+                    # Move to the new position (virtual-desktop aware on Windows;
+                    # pyautogui.moveTo would clamp to the primary monitor).
+                    _set_cursor(x, y)
                     last_pos = (x, y)
                     
                     # Handle wobble without recursion to avoid timing issues
@@ -406,7 +539,7 @@ def _verify_position(target: tuple[int,int], tolerance: int = 3, corrections: in
     Returns True if within tolerance after any corrections, else False.
     """
     try:
-        curr = pyautogui.position()
+        curr = _get_cursor()
     except Exception as e:
         log.error(f"Unable to read mouse position for verification: {e}")
         return False
@@ -419,14 +552,16 @@ def _verify_position(target: tuple[int,int], tolerance: int = 3, corrections: in
     for attempt in range(1, corrections+1):
         log.warning(f"Mouse off target by {dist:.1f}px (expected {target}, got {curr}); correcting (attempt {attempt}/{corrections})")
         try:
-            # Direct small correction; avoid full humanized path to reduce drift loops
-            pyautogui.moveTo(target[0], target[1], _pause=0)
+            # Direct small correction; avoid full humanized path to reduce drift loops.
+            # Use the virtual-desktop-aware helper so corrections on secondary
+            # monitors don't re-clamp to the primary monitor.
+            _set_cursor(target[0], target[1])
             time.sleep(random.uniform(0.008, 0.02))
         except Exception as e:
             log.error(f"Correction attempt {attempt} failed: {e}")
             break
         try:
-            curr = pyautogui.position()
+            curr = _get_cursor()
         except Exception as e:
             log.error(f"Failed to read mouse after correction: {e}")
             break

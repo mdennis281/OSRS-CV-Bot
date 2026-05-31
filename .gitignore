@@ -178,3 +178,6 @@ node_modules/
 # This override must come AFTER the generic `dist/` rule near the top of this file.
 !ui_v2/frontend/dist/
 !ui_v2/frontend/dist/**
+
+.venv*
+.env*

@@ -59,8 +59,8 @@ https://github.com/user-attachments/assets/226daf47-361a-433d-89e3-dad1afb1c87a
 ### Web UI
 
 ![Available Bots](./data/demos/available-bots.png)
-![Running Bot](./data/demos/running-bot.png)
 ![Config UI](./data/demos/config.png)
+![Item Database](./data/demos/item-database.png)
 
 ### Computer Vision Debugger
 
@@ -93,16 +93,26 @@ ui_v2/
 data/                   Item databases, configs, fonts, UI assets
 ```
 
-### Bot Hotkeys 
+### Bot Hotkeys
+
 - **Page Up**: Terminate the bot immediately
 - **Page Down**: Pause/Resume the bot
 
-NOTE: the bot script architecture is migrating from legacy (scripts defined in base dir) to the new bot architecture defined in [./bots](bots/). Invocation of the new architecture can be seen above.
+## Writing Your Own Bot
 
-The new architecture has a core bot class defined here [Bot()](core/bot.py). This Bot() class is used as a way to have all the core components (RuneLiteClient(), ScriptControl(), MovementOrchestrator(), BankInterface(), ItemLookup()) all in one class.
+Every bot in [bots/](bots/) inherits [`core.bot.Bot`](core/bot.py), which gives you `self.client` (CV + clicks), `self.control` (pause/terminate/breaks), `self.bank`, `self.mover`, `self.itemdb`, and `self.log` — all wired up. A `BotConfig` class with typed fields (`ItemParam`, `RangeParam`, `RGBParam`, `BreakCfgParam`, etc.) drives the auto-generated UI form, so every tunable surfaces in the web UI for free.
 
-Noteworthy scripts:
-- [High Alchemy](./bots/high_alch.py)
-- [Motherload Miner](./bots/motherload_miner.py)
-- [Mastering Mixology](./bots/master_mixer.py)
-- [Nightmare Zone](./bots/nmz.py)
+Copy one of these as a starting point — they cover most loop patterns you'll need:
+
+| Bot | Pattern | Good for |
+|---|---|---|
+| [dart_fletcher.py](./bots/dart_fletcher.py) | Drain-until-empty | Simple inventory-driven loops |
+| [high_alch.py](./bots/high_alch.py) | Counted loop | Fixed iteration count |
+| [motherload_miner.py](./bots/motherload_miner.py) | State machine | Multi-phase (mine ↔ bank) bots |
+| [master_mixer.py](./bots/master_mixer.py) | Minigame | Reactive event handling |
+| [cooking.py](./bots/cooking.py) | Bank-heavy | Withdraw → use → deposit cycles |
+| [nmz.py](./bots/nmz.py) | Long idle | Prayer-flick + absorption sips |
+
+Legacy scripts at the repo root (`agility.py`, `mining.py`, etc.) predate the `Bot` framework — they're kept around for clever CV/OCR tricks but don't copy their structure for new bots.
+
+The full operating procedure (hard rules, screenshot workflow, debugging playbook) lives under [.claude/instructions/](.claude/instructions/) and is also mirrored to [.github/](.github/) so Copilot/Cursor pick it up.
